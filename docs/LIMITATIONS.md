@@ -1,31 +1,25 @@
 # Limitations
 
-## Split (BOOSTED / DIRECT)
+AGG is an AmneziaWG **client**, not a self-host installer. No SSH, Docker, OpenVPN, XRay, IKEv2, or Amnezia Premium.
 
-Default route is the Wintun adapter. **BOOSTED** apps use that route. **DIRECT** apps are blocked from the tunnel IPv4 (`AGG-direct-*` firewall rules) so Windows uses the LAN default instead.
+## Split tunneling (Windows, Amnezia semantics)
 
-If nothing is BOOSTED, the tunnel is full (no DIRECT rules).
+**Sites (IPv4):**
 
-No process injection. No homemade NDIS inject (bugcheck). WinpkFilter is **not** bundled.
+- All traffic through VPN
+- Only listed IPs through VPN
+- Listed IPs bypass VPN (more-specific LAN routes)
 
-## Kill switch
+**Apps:** selected executables work **without** VPN (Amnezia Windows exceptions). Opposite mode (only listed apps through VPN) is not on Windows Amnezia either.
 
-Named firewall rules: allow VPS + tunnel IP, block other outbound. Deleted on Stop / `down` / Drop.
+## KillSwitch
 
-If AGG dies with kill switch on, you may have no internet until:
+Blocks the internet if the tunnel drops. Manual disconnect does not. Crash leftover: Settings → Off, or `agg-cli kill-switch off`.
 
-- Settings → **Clear**, or
-- `agg-cli kill-switch off` (elevated), or
-- reboot
+## Protocol
 
-## Packet filter
-
-`ndisapi` detects NDISRD only. Install yourself if you want it: https://github.com/wiresock/ndisapi/releases
+AmneziaWG 2.0 configs (Jc/Jmin/Jmax, S1–S4, H1–H4). No I1–I5 / 3.x header protection.
 
 ## Vanguard
 
-No injection. Virtual NIC + firewall rules may still be flagged (VAN 84). Documented, not evaded.
-
-## Scanner
-
-Paths come from environment variables and launcher files, not a hardcoded `C:\`. Missing folders skipped. Add leftover games with **Add**.
+No process injection. Virtual NIC + firewall may still be flagged. Not evaded.

@@ -7,15 +7,15 @@ type Props = {
 function label(state: Props["state"]): string {
   switch (state) {
     case "connecting":
-      return "Boosting";
+      return "Connecting";
     case "connected":
-      return "Boosted";
+      return "Connected";
     case "disconnecting":
-      return "Stopping";
+      return "Disconnecting";
     case "error":
       return "Retry";
     default:
-      return "Boost";
+      return "Connect";
   }
 }
 

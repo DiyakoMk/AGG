@@ -31,7 +31,7 @@ npm install
 npm run tauri dev
 ```
 
-Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Apps: detect Steam / Epic / Riot / Discord and pick what you want boosted (full tunnel until per-process redirect). Settings: kill switch, auto-reconnect on network change, MTU sweep.
+Phone-sized AmneziaWG client (no self-host). **Home** Connect ring, **Servers** import `.conf`, **Split** IPv4 sites + apps that bypass VPN, **Settings** KillSwitch.
 
 Uninstall helper: `agg-svc.exe uninstall` (elevated), or uninstall AGG from Apps — the NSIS pre-uninstall hook stops and deletes the service.
 

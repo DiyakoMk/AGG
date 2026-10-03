@@ -26,8 +26,8 @@ Linux TUN+UDP (agg-cli)      — handshake / CLI proof
 1. UDP handshake to the VPS (no NIC yet).
 2. Create Wintun adapter `AGG`, set tunnel IPv4 + MTU + DNS.
 3. Pin `/32` to the VPS via the LAN gateway.
-4. Install the config AllowedIPs on `AGG` (usually `0.0.0.0/1` + `128.0.0.0/1`).
-5. DIRECT apps: firewall block from tunnel IPv4. BOOSTED uses the Wintun default route.
+4. Install AllowedIPs (or listed IPs only). Listed-bypass IPs get a LAN route.
+5. Apps marked bypass: firewall block from tunnel IPv4 (Amnezia Windows app split).
 6. Inner IP from Wintun → BoringTun encapsulate → UDP. Reverse on recv.
 6. Stop / service stop deletes routes, firewall rules, and the adapter.
 

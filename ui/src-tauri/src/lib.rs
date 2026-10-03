@@ -333,15 +333,13 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         .map(|g| g.clone())
         .unwrap_or_default()
         .sanitized();
-    opts.boosted_apps = tunneled.clone();
-    opts.direct_exes = if tunneled.is_empty() {
-        Vec::new()
-    } else {
-        apps.iter()
-            .filter(|a| !tunneled.contains(&a.id) && !a.missing)
-            .map(|a| a.executable.display().to_string())
-            .collect()
-    };
+    opts.bypass_apps = tunneled.clone();
+    // Amnezia Windows: selected apps work *without* VPN.
+    opts.direct_exes = apps
+        .iter()
+        .filter(|a| tunneled.contains(&a.id) && !a.missing)
+        .map(|a| a.executable.display().to_string())
+        .collect();
     let mut connecting = StatusSnapshot::connecting(endpoint.clone());
     connecting.server = name.clone();
     connecting.profile_id = Some(profile_id.clone());

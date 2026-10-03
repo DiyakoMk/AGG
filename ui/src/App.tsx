@@ -2,23 +2,22 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
 import {
   DEFAULT_OPTS,
   DetectedApp,
-  FilterStatus,
   IDLE,
   Profile,
   SessionOpts,
+  SiteMode,
   sourceLabel,
   StatusSnapshot,
 } from "./types";
 import "./App.css";
 
-type Tab = "home" | "routes" | "apps" | "settings";
-type Sheet = "none" | "routes" | "add";
+type Tab = "home" | "servers" | "split" | "settings";
+type Sheet = "none" | "servers" | "add";
 
 function fmtRtt(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -35,15 +34,15 @@ function pingTone(n: number | null | undefined): "good" | "ok" | "high" | "off" 
 function stateCopy(state: StatusSnapshot["state"]): string {
   switch (state) {
     case "connecting":
-      return "Finding a better path";
+      return "Connecting";
     case "connected":
-      return "Ping boosted";
+      return "Connected";
     case "disconnecting":
-      return "Dropping the boost";
+      return "Disconnecting";
     case "error":
-      return "Boost failed";
+      return "Connection failed";
     default:
-      return "Direct connection";
+      return "Disconnected";
   }
 }
 
@@ -67,7 +66,7 @@ export default function App() {
   const [appQuery, setAppQuery] = useState("");
   const [appSource, setAppSource] = useState<string>("all");
   const [scanning, setScanning] = useState(false);
-  const [filter, setFilter] = useState<FilterStatus | null>(null);
+  const [cidrDraft, setCidrDraft] = useState("");
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -82,7 +81,6 @@ export default function App() {
     invoke<SessionOpts>("get_opts").then(setOpts).catch(() => {});
     invoke<DetectedApp[]>("list_apps").then(setApps).catch(() => {});
     invoke<string[]>("tunneled_ids").then(setTunneled).catch(() => {});
-    invoke<FilterStatus>("filter_status").then(setFilter).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -118,7 +116,7 @@ export default function App() {
       setSheet("none");
       setTab("home");
       setNote(
-        added.length === 1 ? `${added[0].name} is ready to boost` : `${added.length} routes added`
+        added.length === 1 ? `Added ${added[0].name}` : `Added ${added.length} configs`
       );
     } catch (e) {
       setNote(String(e));
@@ -151,7 +149,7 @@ export default function App() {
       await invoke("select_profile", { id: p.id }).catch(() => {});
       setSheet("none");
       setTab("home");
-      setNote(`${p.name} is ready to boost`);
+      setNote(`Added ${p.name}`);
     } catch (err) {
       setNote(String(err));
     } finally {
@@ -169,7 +167,7 @@ export default function App() {
       texts.push({ name: f.name.replace(/\.conf$/i, ""), body: await f.text() });
     }
     if (!texts.length) {
-      setNote("Drop a .conf file from your VPN");
+      setNote("Drop an AmneziaWG .conf");
       return;
     }
     setBusy(true);
@@ -186,7 +184,7 @@ export default function App() {
       setSheet("none");
       setTab("home");
       setNote(
-        texts.length === 1 ? `${texts[0].name} is ready to boost` : `${texts.length} routes added`
+        texts.length === 1 ? `Added ${texts[0].name}` : `Added ${texts.length} configs`
       );
     } catch (e) {
       setNote(String(e));
@@ -202,10 +200,43 @@ export default function App() {
     setTab("home");
   }
 
+  async function setSiteMode(mode: SiteMode) {
+    await saveOpts({ ...opts, site_mode: mode });
+  }
+
+  async function addCidr(e: FormEvent) {
+    e.preventDefault();
+    const c = cidrDraft.trim();
+    if (!c) return;
+    if (opts.split_sites.includes(c)) {
+      setCidrDraft("");
+      return;
+    }
+    await saveOpts({ ...opts, split_sites: [...opts.split_sites, c] });
+    setCidrDraft("");
+  }
+
+  async function removeCidr(c: string) {
+    await saveOpts({ ...opts, split_sites: opts.split_sites.filter((x) => x !== c) });
+  }
+
+  function splitLine(): string {
+    const appsN = tunneled.length;
+    const sites = opts.site_mode;
+    const site =
+      sites === "only_listed"
+        ? "Listed IPs through VPN"
+        : sites === "except_listed"
+          ? "Listed IPs bypass VPN"
+          : "All traffic";
+    if (!appsN) return site;
+    return `${site} · ${appsN} app${appsN === 1 ? "" : "s"} bypass`;
+  }
+
   async function onConnect() {
     if (!selected) {
       setSheet("add");
-      setTab("routes");
+      setTab("servers");
       return;
     }
     setBusy(true);
@@ -320,25 +351,10 @@ export default function App() {
         <main className="home">
           <header className="hud-top">
             <span className="brand">AGG</span>
-            <span className="tag">ping booster</span>
+            <span className="tag">AmneziaWG</span>
           </header>
 
           <p className={`status is-${status.state}`}>{stateCopy(status.state)}</p>
-
-          <div className={`hud-ping is-${tone}`}>
-            <span className="n">{fmtRtt(status.rtt_ms)}</span>
-            <span className="u">ms</span>
-          </div>
-          <p className="ping-hint">
-            {status.state === "connected"
-              ? tone === "good"
-                ? "Low ping"
-                : tone === "ok"
-                  ? "Playable"
-                  : "High ping — try another route"
-              : "Tap Boost before a match"}
-          </p>
-          <Sparkline values={series} width={280} height={44} />
 
           <ConnectRing
             state={status.state}
@@ -346,27 +362,33 @@ export default function App() {
             onClick={live ? onDisconnect : onConnect}
           />
 
-          <button type="button" className="server-chip" onClick={() => setSheet("routes")}>
-            <span className="server-chip-k">Route</span>
-            <strong>{current?.name ?? "Add a game route"}</strong>
-            <em>{current?.endpoint ?? "Drop in a .conf from your VPN"}</em>
+          {status.state === "connected" && (
+            <section className="live">
+              <div className={`hud-ping is-${tone}`}>
+                <span className="n">{fmtRtt(status.rtt_ms)}</span>
+                <span className="u">ms</span>
+              </div>
+              <Sparkline values={series} width={280} height={40} />
+            </section>
+          )}
+
+          <button type="button" className="server-chip" onClick={() => setSheet("servers")}>
+            <span className="server-chip-k">Server</span>
+            <strong>{current?.name ?? "Add a config"}</strong>
+            <em>{current?.endpoint ?? "Import an AmneziaWG .conf"}</em>
           </button>
 
-          <p className="split-line">
-            {tunneled.length
-              ? `${tunneled.length} boosted`
-              : "Pick games in Apps"}
-          </p>
+          <p className="split-line">{splitLine()}</p>
 
           {status.error && <p className="fault">{status.error}</p>}
           {note && <p className="note">{note}</p>}
         </main>
       )}
 
-      {tab === "routes" && (
+      {tab === "servers" && (
         <main className="page">
           <header className="page-h">
-            <h1>Routes</h1>
+            <h1>Servers</h1>
             <button type="button" className="ghost" onClick={() => setSheet("add")}>
               Add
             </button>
@@ -393,19 +415,59 @@ export default function App() {
         </main>
       )}
 
-      {tab === "apps" && (
+      {tab === "split" && (
         <main className="page">
           <header className="page-h">
-            <h1>Apps</h1>
-            <div className="page-actions">
-              <button type="button" className="ghost" onClick={addManual}>
-                Add
-              </button>
-              <button type="button" className="ghost" disabled={scanning} onClick={rescan}>
-                {scanning ? "Scanning…" : "Refresh"}
-              </button>
-            </div>
+            <h1>Split tunneling</h1>
           </header>
+          <p className="hint">
+            Sites: IPv4 only. Apps on Windows: selected apps work without VPN (Amnezia exceptions).
+          </p>
+          <h2 className="sub">Sites</h2>
+          <div className="pills">
+            {(
+              [
+                ["all", "All traffic"],
+                ["only_listed", "Only listed through VPN"],
+                ["except_listed", "Listed bypass VPN"],
+              ] as const
+            ).map(([id, name]) => (
+              <button
+                key={id}
+                type="button"
+                className={`pill ${opts.site_mode === id ? "on" : ""}`}
+                onClick={() => setSiteMode(id)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          {opts.site_mode !== "all" && (
+            <>
+              <form className="cidr" onSubmit={addCidr}>
+                <input
+                  placeholder="1.1.1.0/24"
+                  value={cidrDraft}
+                  onChange={(e) => setCidrDraft(e.target.value)}
+                />
+                <button type="submit">Add</button>
+              </form>
+              <ul className="cidrs">
+                {opts.split_sites.length === 0 && (
+                  <li className="empty">No IPs yet</li>
+                )}
+                {opts.split_sites.map((c) => (
+                  <li key={c}>
+                    <code>{c}</code>
+                    <button type="button" className="ghost" onClick={() => removeCidr(c)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <h2 className="sub">Apps without VPN</h2>
           <div className="app-tools">
             <input
               className="search"
@@ -413,40 +475,17 @@ export default function App() {
               value={appQuery}
               onChange={(e) => setAppQuery(e.target.value)}
             />
-            <select value={appSource} onChange={(e) => setAppSource(e.target.value)}>
-              <option value="all">All</option>
-              <option value="steam">Steam</option>
-              <option value="epic">Epic</option>
-              <option value="riot">Riot</option>
-              <option value="battle_net">Battle.net</option>
-              <option value="gog">GOG</option>
-              <option value="discord">Discord</option>
-              <option value="manual">Manual</option>
-            </select>
-          </div>
-          <div className="page-actions bulk">
-            <button
-              type="button"
-              className="ghost"
-              onClick={() =>
-                saveTunneled(
-                  apps.filter((a) => a.source !== "discord" && !a.missing).map((a) => a.id)
-                )
-              }
-            >
-              Select games
+            <button type="button" className="ghost" onClick={addManual}>
+              Add .exe
             </button>
-            <button type="button" className="ghost" onClick={() => saveTunneled([])}>
-              Clear
+            <button type="button" className="ghost" disabled={scanning} onClick={rescan}>
+              {scanning ? "…" : "Refresh"}
             </button>
           </div>
-          <p className="hint">
-            BOOSTED stays on AGG. DIRECT is blocked from the tunnel address so it uses your ISP.
-            Empty selection = everything tunnels.
-          </p>
+          <p className="hint">ON = this app bypasses the tunnel. Everything else uses VPN.</p>
           <ul className="apps">
             {shownApps.length === 0 && (
-              <li className="empty">No games yet — Refresh or add an .exe</li>
+              <li className="empty">Refresh or add an .exe</li>
             )}
             {shownApps.map((a) => {
               const on = tunneled.includes(a.id);
@@ -460,9 +499,7 @@ export default function App() {
                       {a.name}
                       {a.missing ? " — missing" : ""}
                     </strong>
-                    <em>
-                      {sourceLabel(a.source)}
-                    </em>
+                    <em>{sourceLabel(a.source)}</em>
                   </div>
                   <button
                     type="button"
@@ -470,7 +507,7 @@ export default function App() {
                     disabled={a.missing}
                     onClick={() => toggleApp(a.id)}
                   >
-                    {on ? "BOOSTED" : "DIRECT"}
+                    {on ? "BYPASS" : "VPN"}
                   </button>
                 </li>
               );
@@ -482,30 +519,13 @@ export default function App() {
       {tab === "settings" && (
         <main className="page">
           <header className="page-h">
-            <h1>Settings</h1>
+            <h1>Connection</h1>
           </header>
           <ul className="rows">
             <li>
               <div>
-                <strong>Packet filter</strong>
-                <em>{filter?.present ? "Installed" : filter?.hint ?? "Checking…"}</em>
-              </div>
-              {!filter?.present && (
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() =>
-                    openUrl(filter?.download ?? "https://github.com/wiresock/ndisapi/releases")
-                  }
-                >
-                  Install
-                </button>
-              )}
-            </li>
-            <li>
-              <div>
-                <strong>Kill switch</strong>
-                <em>Block the internet if the tunnel drops. If you have no net after a crash: Settings → Clear, or agg-cli kill-switch off</em>
+                <strong>KillSwitch</strong>
+                <em>Block the internet if the VPN drops. Manual disconnect does not block.</em>
               </div>
               <Toggle
                 on={opts.kill_switch}
@@ -514,8 +534,8 @@ export default function App() {
             </li>
             <li>
               <div>
-                <strong>Clear firewall leftover</strong>
-                <em>Removes kill-switch and DIRECT rules if AGG died</em>
+                <strong>Clear leftover</strong>
+                <em>If AGG crashed with KillSwitch on</em>
               </div>
               <button
                 type="button"
@@ -526,7 +546,7 @@ export default function App() {
                     .catch((e) => setNote(String(e)))
                 }
               >
-                Clear
+                Off
               </button>
             </li>
             <li>
@@ -541,18 +561,8 @@ export default function App() {
             </li>
             <li>
               <div>
-                <strong>MTU sweep</strong>
-                <em>Pick a path MTU so packets do not fragment</em>
-              </div>
-              <Toggle
-                on={opts.mtu_sweep}
-                onClick={() => saveOpts({ ...opts, mtu_sweep: !opts.mtu_sweep })}
-              />
-            </li>
-            <li>
-              <div>
                 <strong>About</strong>
-                <em>AGG 0.1 · personal Windows ping booster</em>
+                <em>AGG · AmneziaWG client · no self-host</em>
               </div>
             </li>
           </ul>
@@ -561,17 +571,17 @@ export default function App() {
 
       <nav className="tabs four">
         <button type="button" className={tab === "home" ? "on" : ""} onClick={() => setTab("home")}>
-          Boost
+          Home
         </button>
         <button
           type="button"
-          className={tab === "routes" ? "on" : ""}
-          onClick={() => setTab("routes")}
+          className={tab === "servers" ? "on" : ""}
+          onClick={() => setTab("servers")}
         >
-          Routes
+          Servers
         </button>
-        <button type="button" className={tab === "apps" ? "on" : ""} onClick={() => setTab("apps")}>
-          Apps
+        <button type="button" className={tab === "split" ? "on" : ""} onClick={() => setTab("split")}>
+          Split
         </button>
         <button
           type="button"
@@ -586,10 +596,10 @@ export default function App() {
         <div className="scrim" onClick={() => setSheet("none")}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="grab" />
-            {sheet === "routes" && (
+            {sheet === "servers" && (
               <>
                 <div className="sheet-h">
-                  <h2>Routes</h2>
+                  <h2>Servers</h2>
                   <button type="button" className="ghost" onClick={() => setSheet("add")}>
                     Add
                   </button>

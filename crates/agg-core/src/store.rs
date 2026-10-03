@@ -1,8 +1,8 @@
-//! `%LOCALAPPDATA%\AGG\config.json` — source of truth for session flags.
+//! `%LOCALAPPDATA%\AGG\config.json`
 
 use serde::{Deserialize, Serialize};
 
-use crate::policy::SessionOpts;
+use crate::policy::{SessionOpts, SiteMode};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppConfig {
@@ -15,7 +15,11 @@ pub struct AppConfig {
     #[serde(default = "on")]
     pub mtu_sweep: bool,
     #[serde(default)]
-    pub boosted_apps: Vec<String>,
+    pub site_mode: SiteMode,
+    #[serde(default)]
+    pub split_sites: Vec<String>,
+    #[serde(default)]
+    pub bypass_apps: Vec<String>,
 }
 
 fn one() -> u32 {
@@ -32,7 +36,9 @@ impl Default for AppConfig {
             kill_switch: false,
             auto_reconnect: true,
             mtu_sweep: true,
-            boosted_apps: Vec::new(),
+            site_mode: SiteMode::All,
+            split_sites: Vec::new(),
+            bypass_apps: Vec::new(),
         }
     }
 }
@@ -43,18 +49,10 @@ impl AppConfig {
             kill_switch: self.kill_switch,
             auto_reconnect: self.auto_reconnect,
             mtu_sweep: self.mtu_sweep,
-            boosted_apps: self.boosted_apps.clone(),
+            site_mode: self.site_mode,
+            split_sites: self.split_sites.clone(),
+            bypass_apps: self.bypass_apps.clone(),
             direct_exes: Vec::new(),
-        }
-    }
-
-    pub fn from_opts(opts: &SessionOpts, boosted: Vec<String>) -> Self {
-        Self {
-            version: 1,
-            kill_switch: opts.kill_switch,
-            auto_reconnect: opts.auto_reconnect,
-            mtu_sweep: opts.mtu_sweep,
-            boosted_apps: boosted,
         }
     }
 }

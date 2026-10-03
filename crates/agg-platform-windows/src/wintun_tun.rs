@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agg_core::config::WgConfig;
-use agg_core::{tunnel_nets, SessionOpts, TunnelEngine};
+use agg_core::{bypass_nets, tunnel_nets, SessionOpts, TunnelEngine};
 use boringtun::noise::TunnResult;
 use ipnet::IpNet;
 use wintun::{Adapter, Session};
@@ -82,7 +82,8 @@ pub fn wintun_up_with_stats(
         eprintln!("adapter {ADAPTER_NAME} if={}", tun.if_index);
 
         let nets = tunnel_nets(&opts, &peer.allowed_ips);
-        let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets)?;
+        let lan = bypass_nets(&opts);
+        let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets, &lan)?;
         eprintln!("routes on ({}) ; forwarding", opts.label());
 
         let _split = match crate::wfp::SplitRules::engage(tun_ip, &opts.direct_exes) {
@@ -483,6 +484,7 @@ impl WinRoutes {
         if_index: u32,
         tun_ip: Ipv4Addr,
         allowed: &[IpNet],
+        lan_except: &[IpNet],
     ) -> Result<Self, PlatformError> {
         let gw = default_gateway()?;
         let mut g = Self { added: Vec::new() };
@@ -495,6 +497,20 @@ impl WinRoutes {
             "metric",
             "1",
         ])?;
+        for net in lan_except {
+            if let IpAddr::V4(a) = net.addr() {
+                let mask = prefix_to_mask(net.prefix_len());
+                g.add(&[
+                    "add",
+                    &a.to_string(),
+                    "mask",
+                    &mask.to_string(),
+                    &gw,
+                    "metric",
+                    "1",
+                ])?;
+            }
+        }
         for net in allowed {
             if !net.addr().is_ipv4() {
                 continue;

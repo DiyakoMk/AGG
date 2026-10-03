@@ -17,7 +17,7 @@ pub mod udp_session;
 pub use config::{parse_conf, WgConfig};
 pub use error::AggError;
 pub use discovery::{scan, windows_roots, AppSource, DetectedApp, ScanRoots};
-pub use policy::{tunnel_nets, SessionOpts};
+pub use policy::{bypass_nets, tunnel_nets, SessionOpts, SiteMode};
 pub use store::AppConfig;
 pub use stats::TunnelStats;
 pub use status::{ConnectionState, StatusSnapshot};

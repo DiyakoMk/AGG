@@ -5,11 +5,15 @@ export type ConnectionState =
   | "disconnecting"
   | "error";
 
+export type SiteMode = "all" | "only_listed" | "except_listed";
+
 export type SessionOpts = {
   kill_switch: boolean;
   auto_reconnect: boolean;
   mtu_sweep: boolean;
-  boosted_apps?: string[];
+  site_mode: SiteMode;
+  split_sites: string[];
+  bypass_apps?: string[];
   direct_exes?: string[];
 };
 
@@ -17,6 +21,8 @@ export const DEFAULT_OPTS: SessionOpts = {
   kill_switch: false,
   auto_reconnect: true,
   mtu_sweep: true,
+  site_mode: "all",
+  split_sites: [],
 };
 
 export type AppSource =
