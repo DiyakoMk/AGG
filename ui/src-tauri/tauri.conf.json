@@ -13,11 +13,13 @@
     "windows": [
       {
         "title": "AGG",
-        "width": 1080,
-        "height": 720,
-        "minWidth": 860,
-        "minHeight": 600,
-        "resizable": true
+        "width": 390,
+        "height": 780,
+        "minWidth": 360,
+        "minHeight": 640,
+        "resizable": true,
+        "maximizable": false,
+        "center": true,
       }
     ],
     "security": {

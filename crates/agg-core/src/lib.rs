@@ -6,6 +6,7 @@ pub mod config;
 pub mod error;
 pub mod health;
 pub mod intercept;
+pub mod ipc;
 pub mod packet;
 pub mod policy;
 pub mod stats;

@@ -1,8 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::stats::TunnelStats;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionState {
     #[default]
@@ -14,7 +14,7 @@ pub enum ConnectionState {
 }
 
 /// Pushed to the UI at 1 Hz. No secrets.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StatusSnapshot {
     pub state: ConnectionState,
     pub server: Option<String>,

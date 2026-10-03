@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
+use agg_core::ipc::{rpc, IpcRequest};
 use agg_core::{run_udp_session, ConnectionState, StatusSnapshot, WgConfig};
 use profiles::{Library, Profile};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -148,7 +149,49 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
     let running = Arc::new(AtomicBool::new(true));
     let run = running.clone();
     let app2 = app.clone();
+    let conf_path = path.display().to_string();
     let worker = std::thread::spawn(move || {
+        if cfg!(windows) {
+            match rpc(&IpcRequest::Connect { path: conf_path }) {
+                Err(e) => {
+                    let _ = app2.emit("status", StatusSnapshot::failed(e));
+                    return;
+                }
+                Ok(r) if !r.ok => {
+                    let _ = app2.emit(
+                        "status",
+                        StatusSnapshot::failed(r.error.unwrap_or_else(|| "connect failed".into())),
+                    );
+                    return;
+                }
+                Ok(_) => {}
+            }
+            while run.load(Ordering::SeqCst) {
+                match rpc(&IpcRequest::Status) {
+                    Ok(r) => {
+                        if let Some(mut snap) = r.status {
+                            snap.server = name.clone();
+                            snap.profile_id = Some(profile_id.clone());
+                            let _ = app2.emit("status", &snap);
+                            if matches!(
+                                snap.state,
+                                ConnectionState::Idle | ConnectionState::Error
+                            ) && snap.error.is_some()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = app2.emit("status", StatusSnapshot::failed(e));
+                        break;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            return;
+        }
+
         let on_stats = {
             let app2 = app2.clone();
             let endpoint = endpoint.clone();
@@ -161,14 +204,7 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
                 let _ = app2.emit("status", &snap);
             }
         };
-
-        let result = if cfg!(windows) {
-            agg_platform_windows::wintun_up_with_stats(&cfg, &run, on_stats)
-                .map_err(|e| e.to_string())
-        } else {
-            run_udp_session(&cfg, &run, on_stats).map_err(|e| e.to_string())
-        };
-
+        let result = run_udp_session(&cfg, &run, on_stats).map_err(|e| e.to_string());
         if let Err(e) = result {
             if run.load(Ordering::SeqCst) {
                 let _ = app2.emit("status", StatusSnapshot::failed(e));
@@ -201,7 +237,7 @@ fn disconnect(app: AppHandle, state: State<AppState>) -> Result<(), String> {
         s.running.store(false, Ordering::SeqCst);
         #[cfg(windows)]
         {
-            let _ = agg_platform_windows::wintun_down();
+            let _ = rpc(&IpcRequest::Disconnect);
         }
         if let Some(h) = s.worker.take() {
             let _ = h.join();

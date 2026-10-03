@@ -1,53 +1,33 @@
 # AGG
 
-Personal Windows gaming VPN for two AmneziaWG 2.0 VPSes. Rust core, Tauri v2 shell.
+Personal Windows gaming VPN. Rust core, phone-sized Tauri shell.
 
-Windows datapath: **Wintun adapter `AGG` + UDP AmneziaWG**. Official `wintun.dll` is **bundled** (prebuilt binaries license). NDIS inject is off (bugcheck). VAN 84 ignored per operator.
+Tunnel: Wintun adapter `AGG` + UDP AmneziaWG. Official `wintun.dll` is bundled. Creating that adapter needs elevation **once** — after `agg-svc.exe install`, the app itself is not Administrator.
 
-## Standalone Windows build (on your Windows box)
-
-Needs: Rust (MSVC), Node 20+, WebView2 (comes with Win 10/11).
+## Windows
 
 ```bash
-# CLI only — one folder, no extra DLL copy:
 cargo build -p agg-cli --release
-# target\release\agg-cli.exe
-# first `up` writes wintun.dll next to the exe
+cargo build -p agg-svc --release
+# once, elevated:
+target\release\agg-svc.exe install
 
-# Desktop app + NSIS installer:
-cd ui
-npm install
-npm run tauri build
-# ui\src-tauri\target\release\agg-ui.exe
-# ui\src-tauri\target\release\bundle\nsis\*.exe
-```
-
-Run **as Administrator**. Config path in the UI is relative to the process cwd (put `awg.conf` next to the exe, or use a full path).
-
-```bash
-agg-cli handshake --config awg.conf
-agg-cli up --config awg.conf
-# Ctrl-C deletes AGG. If it remains:
-agg-cli down
-```
-
-## Phase 2 UI
-
-Dashboard: drop / browse / paste as many `.conf` files as you want, rename, connect. Live RTT sparkline (last 60 s). No JS polling.
-
-```bash
 cd ui
 npm install
 npm run tauri dev
 ```
 
+The window is phone-sized. Tap **go**. Locations sheet: files / paste as many `.conf` as you want.
+
+Uninstall helper: `agg-svc.exe uninstall` (elevated).
+
+Standalone UI: `npm run tauri build` → `ui\src-tauri\target\release\bundle\nsis\`.
+
+## Linux (handshake / CLI only)
+
+```bash
+cargo test -p agg-core
+cargo run -p agg-cli -- handshake --config awg.conf
+```
+
 Do not commit real `.conf` files.
-
-## Decisions (locked)
-
-- Accent `#22D3EE` on `#0a0a0c`
-- shadcn/ui, visx, tauri-specta (Phase 3+)
-- Tunnel: wiresock-boringtun `@ ae2ab44e`, AWG 2.0
-- Wintun NIC `AGG`; official DLL bundled
-- Do not bundle WinpkFilter
-- No code signing

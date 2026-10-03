@@ -1,19 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 
 :root {
-  --bg: #0a0a0c;
-  --panel: #121216;
-  --line: #222228;
-  --ink: #e6e6ea;
-  --mute: #8a8a94;
+  --bg: #07070a;
+  --ink: #f2f2f4;
+  --mute: #9a9aa3;
   --cyan: #22d3ee;
-  --amber: #e8b84a;
+  --line: #1c1c22;
   --fault: #e66767;
-  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--sans);
   color: var(--ink);
   background: var(--bg);
-  font-family: var(--sans);
 }
 
 * {
@@ -35,282 +33,177 @@ textarea {
   color: inherit;
 }
 
-.app {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  height: 100%;
-}
-
-.app.dragging .drop {
-  outline: 1px dashed var(--cyan);
-  color: var(--cyan);
-}
-
-.rail {
-  border-right: 1px solid var(--line);
+.phone {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100%;
+  padding: 1.25rem 1.25rem 2rem;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  background: var(--panel);
+  align-items: center;
+  gap: 0.55rem;
 }
 
-.rail-head {
+.top {
+  width: 100%;
   display: flex;
-  align-items: baseline;
   justify-content: space-between;
-  padding: 1.1rem 1rem 0.6rem;
+  align-items: center;
 }
 
-.mark {
+.brand {
   font-family: var(--mono);
-  font-size: 0.95rem;
-  letter-spacing: 0.08em;
+  font-size: 0.85rem;
   color: var(--cyan);
 }
 
-.count {
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  color: var(--mute);
-}
-
-.drop {
-  margin: 0 0.85rem 0.75rem;
-  padding: 0.85rem;
-  border: 1px dashed var(--line);
-  color: var(--mute);
-  font-size: 0.8rem;
-}
-
-.drop p {
-  margin: 0 0 0.6rem;
-}
-
-.drop-actions {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.drop-actions button,
-.row button,
-.go,
-.sheet button {
-  background: transparent;
-  border: 1px solid var(--line);
-  padding: 0.35rem 0.6rem;
-  cursor: pointer;
-}
-
-.drop-actions button:hover,
-.row button:hover {
-  border-color: var(--cyan);
-}
-
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0 0.6rem 1rem;
-  overflow: auto;
-  flex: 1;
-}
-
-.empty {
-  color: var(--mute);
-  font-size: 0.8rem;
-  padding: 0.5rem 0.4rem;
-}
-
-.card {
-  position: relative;
-  padding: 0.65rem 1.6rem 0.65rem 0.65rem;
-  margin-bottom: 2px;
-  cursor: pointer;
-  border-left: 2px solid transparent;
-}
-
-.card.on {
-  background: #18181e;
-  border-left-color: var(--cyan);
-}
-
-.card.live .name {
-  color: var(--cyan);
-}
-
-.name {
-  display: block;
-  width: 100%;
-  text-align: left;
+.ghost {
   background: none;
   border: 0;
-  padding: 0;
-  font-weight: 500;
+  color: var(--mute);
   cursor: pointer;
+  padding: 0.25rem;
 }
 
-.meta {
-  display: block;
-  margin-top: 0.2rem;
-  font-family: var(--mono);
-  font-size: 0.7rem;
+.pill {
+  margin: 1.4rem 0 0;
+  font-size: 0.8rem;
   color: var(--mute);
 }
 
-.x {
-  position: absolute;
-  top: 0.45rem;
-  right: 0.35rem;
-  border: 0;
-  background: none;
-  color: var(--mute);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.rename {
-  width: 100%;
-  background: #0e0e12;
-  border: 1px solid var(--cyan);
-  padding: 0.2rem 0.3rem;
-}
-
-.stage {
-  padding: 2rem 2.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-  min-width: 0;
-}
-
-.state {
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-
-.is-connected {
+.pill.is-connected {
   color: var(--cyan);
 }
-.is-connecting,
-.is-disconnecting {
-  color: var(--amber);
+.pill.is-connecting {
+  color: #e8b84a;
 }
-.is-fault,
-.is-error {
+.pill.is-error {
   color: var(--fault);
 }
-.is-idle {
-  color: var(--mute);
-}
 
-.hero {
+.rtt {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1.5rem;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
-.num {
+.n {
   font-family: var(--mono);
-  font-size: 4.2rem;
+  font-size: 5.2rem;
   font-weight: 500;
   line-height: 0.9;
   font-variant-numeric: tabular-nums;
 }
 
-.unit {
+.u {
   font-family: var(--mono);
   color: var(--mute);
-  margin: 0 0.35rem;
-  font-size: 0.85rem;
 }
 
 .spark {
   color: var(--cyan);
-  opacity: 0.9;
+  margin: 0.4rem 0 0.8rem;
 }
 
-.verdict {
+.loc {
   margin: 0;
-  color: var(--mute);
-  max-width: 36rem;
-}
-
-.strip {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr 0.9fr 0.6fr;
-  gap: 1rem;
-  margin: 0;
-  padding: 0.9rem 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.strip dt {
-  font-size: 0.7rem;
-  color: var(--mute);
-}
-
-.strip dd {
-  margin: 0.25rem 0 0;
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fault {
-  margin: 0;
-  color: var(--fault);
-}
-
-.note {
-  margin: 0;
-  color: var(--mute);
-  font-size: 0.85rem;
-}
-
-.go {
-  align-self: flex-start;
-  padding: 0.7rem 1.2rem;
-  background: var(--cyan);
-  color: #041016;
-  border: 0;
-  cursor: pointer;
+  font-size: 1.05rem;
   font-weight: 500;
 }
 
-.go.stop {
-  background: transparent;
+.ep {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--mute);
+}
+
+.stats {
+  list-style: none;
+  display: flex;
+  gap: 1.4rem;
+  padding: 0;
+  margin: 1.1rem 0 0;
+}
+
+.stats span {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--mute);
+}
+
+.stats b {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.fault {
+  color: var(--fault);
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 0.4rem 0 0;
+}
+
+.note {
+  color: var(--mute);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.orb {
+  margin-top: auto;
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--cyan);
+  color: #041016;
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.orb.on {
+  background: #1a1a20;
   color: var(--ink);
-  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.go:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.orb:disabled {
+  opacity: 0.4;
 }
 
-.modal {
+.scrim {
   position: fixed;
   inset: 0;
-  background: rgba(6, 6, 8, 0.72);
-  display: grid;
-  place-items: center;
-  z-index: 10;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 
 .sheet {
-  width: min(32rem, 92vw);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 1.25rem;
+  width: min(430px, 100%);
+  max-height: 78%;
+  background: #101014;
+  border-radius: 1.1rem 1.1rem 0 0;
+  padding: 0.5rem 1rem 1.5rem;
+  overflow: auto;
+}
+
+.grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: #333;
+  margin: 0.4rem auto 0.9rem;
+}
+
+.sheet-h {
   display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .sheet h2 {
@@ -319,25 +212,65 @@ textarea {
   font-weight: 500;
 }
 
-.sheet input,
-.sheet textarea {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  padding: 0.5rem 0.6rem;
-  font-family: var(--mono);
-  font-size: 0.8rem;
+.locs {
+  list-style: none;
+  padding: 0;
+  margin: 0.8rem 0 0;
 }
 
-.row {
+.locs li {
   display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
 }
 
-.row button[type="submit"] {
+.locs strong {
+  display: block;
+  font-weight: 500;
+}
+
+.locs em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--mute);
+}
+
+.locs li.sel strong {
+  color: var(--cyan);
+}
+
+.empty {
+  color: var(--mute);
+  padding: 1rem 0;
+}
+
+.paste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.paste input,
+.paste textarea {
+  background: #07070a;
+  border: 1px solid var(--line);
+  padding: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  border-radius: 0.4rem;
+}
+
+.paste button[type="submit"] {
   background: var(--cyan);
   color: #041016;
   border: 0;
+  padding: 0.7rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {

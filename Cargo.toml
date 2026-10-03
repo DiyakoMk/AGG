@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/agg-core", "crates/agg-cli", "crates/agg-platform-windows"]
+members = [
+    "crates/agg-core",
+    "crates/agg-cli",
+    "crates/agg-platform-windows",
+    "crates/agg-svc",
+]
 exclude = ["ui/src-tauri"]
 
 [workspace.package]
