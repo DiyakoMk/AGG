@@ -31,7 +31,7 @@ npm install
 npm run tauri dev
 ```
 
-Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Settings: what to boost (games / launchers / both / everything) and always-on-top.
+Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Settings: up to 3 layouts (Steam, Riot, Discord, …), kill switch, auto-reconnect, MTU sweep.
 
 Uninstall helper: `agg-svc.exe uninstall` (elevated), or uninstall AGG from Apps — the NSIS pre-uninstall hook stops and deletes the service.
 

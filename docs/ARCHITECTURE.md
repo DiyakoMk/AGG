@@ -45,6 +45,8 @@ NDIS `send_packet*` is not used. Homemade `IntermediateBuffer`s bugcheck WinpkFi
 ## Rules
 
 - Windows tunnel NIC is Wintun `AGG`. Must be deleted on exit.
-- No game-process injection. Split is destination-IP only (`Games` / `Launchers` / `Both` / `All`).
+- No game-process injection. Split is destination-IP layouts (up to 3: Steam, Riot, Battle.net, EA, Ubisoft, Discord, or Everything).
+- Kill switch: named Windows Firewall rules, deleted on Drop / `down`.
+- Auto-reconnect after handshake or UDP failure. Optional MTU sweep.
 - Every routing / filter-mode change has a rollback
 - Private keys never in `Display`/`Debug`/logs

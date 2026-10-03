@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agg_core::config::WgConfig;
-use agg_core::{tunnel_nets, SplitMode, TunnelEngine};
+use agg_core::{tunnel_nets, SessionOpts, TunnelEngine};
 use boringtun::noise::TunnResult;
 use ipnet::IpNet;
 use wintun::{Adapter, Session};
@@ -25,15 +25,16 @@ pub const WINTUN_DOWNLOAD: &str = "https://www.wintun.net/";
 const BUF: usize = 2048;
 
 pub fn wintun_up(cfg: &WgConfig, running: &AtomicBool) -> Result<(), PlatformError> {
-    wintun_up_with_stats(cfg, running, SplitMode::All, |_| {})
+    wintun_up_with_stats(cfg, running, &SessionOpts::default(), |_| {})
 }
 
 pub fn wintun_up_with_stats(
     cfg: &WgConfig,
     running: &AtomicBool,
-    split: SplitMode,
+    opts: &SessionOpts,
     mut on_stats: impl FnMut(agg_core::TunnelStats),
 ) -> Result<(), PlatformError> {
+    let opts = opts.sanitized();
     let peer = cfg
         .peer()
         .map_err(|e| PlatformError::msg(e.to_string()))?
@@ -50,30 +51,61 @@ pub fn wintun_up_with_stats(
             _ => None,
         })
         .ok_or_else(|| PlatformError::msg("[Interface] Address must include IPv4"))?;
-    let mtu = cfg.interface.mtu.unwrap_or(1280);
+    let mtu_cap = cfg.interface.mtu.unwrap_or(1420);
 
-    eprintln!("handshake {endpoint} (no adapter yet)");
-    let mut engine = TunnelEngine::from_config(cfg).map_err(|e| PlatformError::msg(e.to_string()))?;
-    let udp = bind_udp(endpoint)?;
-    if !drive_handshake(&mut engine, &udp, endpoint, Duration::from_secs(15))? {
-        return Err(PlatformError::msg(
-            "handshake failed; AGG adapter was not created",
-        ));
-    }
-    eprintln!("handshake ok — creating Wintun adapter {ADAPTER_NAME}");
+    loop {
+        if !running.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        eprintln!("handshake {endpoint} (no adapter yet)");
+        let mut engine =
+            TunnelEngine::from_config(cfg).map_err(|e| PlatformError::msg(e.to_string()))?;
+        let udp = bind_udp(endpoint)?;
+        if !drive_handshake(&mut engine, &udp, endpoint, Duration::from_secs(15))? {
+            if opts.auto_reconnect && running.load(Ordering::SeqCst) {
+                eprintln!("handshake failed; retry in 3s");
+                std::thread::sleep(Duration::from_secs(3));
+                continue;
+            }
+            return Err(PlatformError::msg(
+                "handshake failed; AGG adapter was not created",
+            ));
+        }
+        let mtu = if opts.mtu_sweep {
+            sweep_mtu(&udp, mtu_cap)
+        } else {
+            mtu_cap.min(1280).max(576)
+        };
+        eprintln!("handshake ok — creating Wintun adapter {ADAPTER_NAME} mtu={mtu}");
 
-    let mut tun = WintunTun::open(tun_ip, plen, mtu, &cfg.interface.dns)?;
-    eprintln!("adapter {ADAPTER_NAME} if={}", tun.if_index);
+        let mut tun = WintunTun::open(tun_ip, plen, mtu, &cfg.interface.dns)?;
+        eprintln!("adapter {ADAPTER_NAME} if={}", tun.if_index);
 
-    let nets = tunnel_nets(split, &peer.allowed_ips);
-    let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets)?;
-    eprintln!("routes on ({}) ; forwarding until Ctrl-C", split.label());
+        let nets = tunnel_nets(&opts, &peer.allowed_ips);
+        let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets)?;
+        eprintln!("routes on ({}) ; forwarding", opts.label());
 
-    let mut last_timer = Instant::now();
-    let mut last_stats = Instant::now();
-    let mut dst = [0u8; BUF];
+        let _kill = if opts.kill_switch {
+            match crate::wfp::KillSwitch::engage(endpoint, tun_ip) {
+                Ok(k) => {
+                    eprintln!("kill switch on");
+                    Some(k)
+                }
+                Err(e) => {
+                    tracing::warn!("kill switch: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
-    while running.load(Ordering::SeqCst) {
+        let mut last_timer = Instant::now();
+        let mut last_stats = Instant::now();
+        let mut dst = [0u8; BUF];
+        let mut udp_err = 0u8;
+
+        while running.load(Ordering::SeqCst) {
         match tun.try_recv() {
             Ok(Some(pkt)) => match engine.encapsulate(&pkt, &mut dst) {
                 TunnResult::WriteToNetwork(p) => {
@@ -106,8 +138,16 @@ pub fn wintun_up_with_stats(
                 }
             }
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(e) => tracing::warn!("udp recv: {e}"),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                udp_err = 0;
+            }
+            Err(e) => {
+                tracing::warn!("udp recv: {e}");
+                udp_err = udp_err.saturating_add(1);
+                if udp_err > 20 {
+                    break;
+                }
+            }
         }
 
         if last_timer.elapsed() >= Duration::from_millis(250) {
@@ -131,16 +171,38 @@ pub fn wintun_up_with_stats(
             );
         }
 
-        std::thread::sleep(Duration::from_millis(1));
-    }
+            std::thread::sleep(Duration::from_millis(1));
+        }
 
-    eprintln!("tearing down adapter and routes");
-    routes.restore();
-    tun.delete();
-    Ok(())
+        eprintln!("tearing down adapter and routes");
+        drop(_kill);
+        routes.restore();
+        tun.delete();
+        if !running.load(Ordering::SeqCst) || !opts.auto_reconnect {
+            return Ok(());
+        }
+        eprintln!("network dropped; reconnecting");
+        std::thread::sleep(Duration::from_secs(2));
+    }
+}
+
+fn sweep_mtu(udp: &UdpSocket, cap: u16) -> u16 {
+    let cap = cap.clamp(576, 1500);
+    for try_mtu in [cap, 1420, 1380, 1280, 1200] {
+        if try_mtu > cap {
+            continue;
+        }
+        let payload = vec![0u8; (try_mtu as usize).saturating_sub(28).min(1400)];
+        if udp.send(&payload).is_ok() {
+            eprintln!("mtu sweep picked {try_mtu}");
+            return try_mtu;
+        }
+    }
+    1280
 }
 
 pub fn wintun_down() -> Result<(), PlatformError> {
+    crate::wfp::KillSwitch::disarm_leftovers();
     WinRoutes::restore_defaults();
     let wintun = match load_dll() {
         Ok(w) => w,

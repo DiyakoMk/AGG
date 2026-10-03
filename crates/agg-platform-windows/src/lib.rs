@@ -45,6 +45,8 @@ pub struct AdapterInfo {
 #[cfg(windows)]
 mod session;
 #[cfg(windows)]
+mod wfp;
+#[cfg(windows)]
 mod wintun_tun;
 #[cfg(windows)]
 pub use session::{capture_one, detect, intercept_loop, list_adapters, restore_all_adapters};
@@ -99,7 +101,7 @@ pub fn wintun_up(
 pub fn wintun_up_with_stats(
     _cfg: &agg_core::WgConfig,
     _running: &std::sync::atomic::AtomicBool,
-    _split: agg_core::SplitMode,
+    _opts: &agg_core::SessionOpts,
     _on_stats: impl FnMut(agg_core::TunnelStats),
 ) -> Result<(), PlatformError> {
     Err(PlatformError::NotWindows)

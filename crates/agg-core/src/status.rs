@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::policy::SplitMode;
+use crate::policy::SessionOpts;
 use crate::stats::TunnelStats;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -30,7 +30,7 @@ pub struct StatusSnapshot {
     #[serde(default)]
     pub rtt_history: Vec<u32>,
     #[serde(default)]
-    pub split: SplitMode,
+    pub opts: SessionOpts,
 }
 
 impl StatusSnapshot {
@@ -47,7 +47,7 @@ impl StatusSnapshot {
             error: None,
             profile_id: None,
             rtt_history: Vec::new(),
-            split: SplitMode::All,
+            opts: SessionOpts::default(),
         }
     }
 
@@ -77,7 +77,7 @@ impl StatusSnapshot {
             error: None,
             profile_id: None,
             rtt_history: Vec::new(),
-            split: SplitMode::All,
+            opts: SessionOpts::default(),
         }
     }
 

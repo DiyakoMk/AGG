@@ -17,7 +17,7 @@ pub mod udp_session;
 pub use config::{parse_conf, WgConfig};
 pub use error::AggError;
 pub use intercept::{Direction, Intercept, Verdict};
-pub use policy::{destinations, tunnel_nets, SplitMode};
+pub use policy::{catalog, destinations, processes, tunnel_nets, Layout, SessionOpts, MAX_LAYOUTS};
 pub use stats::TunnelStats;
 pub use status::{ConnectionState, StatusSnapshot};
 pub use tunnel::TunnelEngine;

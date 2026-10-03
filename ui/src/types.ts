@@ -5,14 +5,25 @@ export type ConnectionState =
   | "disconnecting"
   | "error";
 
-export type SplitMode = "all" | "games" | "launchers" | "both";
+export type SessionOpts = {
+  layouts: string[];
+  kill_switch: boolean;
+  auto_reconnect: boolean;
+  mtu_sweep: boolean;
+};
 
-export const SPLIT_OPTIONS: { id: SplitMode; name: string; hint: string }[] = [
-  { id: "both", name: "Games + launchers", hint: "Match servers and Steam / Battle.net / Riot / EA / Ubisoft" },
-  { id: "games", name: "Games", hint: "Match servers only — chat and browser stay direct" },
-  { id: "launchers", name: "Launchers", hint: "Steam, Battle.net, Riot, EA, Ubisoft" },
-  { id: "all", name: "Everything", hint: "Full tunnel — every app uses the boost" },
-];
+export type LayoutView = {
+  id: string;
+  name: string;
+  hint: string;
+};
+
+export const DEFAULT_OPTS: SessionOpts = {
+  layouts: ["steam", "discord"],
+  kill_switch: false,
+  auto_reconnect: true,
+  mtu_sweep: true,
+};
 
 export type StatusSnapshot = {
   state: ConnectionState;
@@ -26,7 +37,7 @@ export type StatusSnapshot = {
   error: string | null;
   profile_id: string | null;
   rtt_history: number[];
-  split: SplitMode;
+  opts: SessionOpts;
 };
 
 export type Profile = {
@@ -51,5 +62,5 @@ export const IDLE: StatusSnapshot = {
   error: null,
   profile_id: null,
   rtt_history: [],
-  split: "both",
+  opts: DEFAULT_OPTS,
 };

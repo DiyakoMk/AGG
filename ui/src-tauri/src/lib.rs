@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use agg_core::ipc::{rpc, IpcRequest};
-use agg_core::{run_udp_session, ConnectionState, SplitMode, StatusSnapshot, WgConfig};
+use agg_core::ipc::{rpc, IpcRequest, LayoutView};
+use agg_core::{catalog, run_udp_session, ConnectionState, SessionOpts, StatusSnapshot, WgConfig};
 use profiles::{Library, Profile};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -20,7 +20,7 @@ struct AppState {
     last: Mutex<StatusSnapshot>,
     history: Mutex<VecDeque<u32>>,
     lib: Mutex<Option<Library>>,
-    split: Mutex<SplitMode>,
+    opts: Mutex<SessionOpts>,
 }
 
 const HISTORY: usize = 60;
@@ -135,39 +135,51 @@ fn select_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<
 }
 
 #[tauri::command]
-fn get_split(state: State<AppState>) -> SplitMode {
-    state.split.lock().map(|g| *g).unwrap_or_default()
+fn list_layouts() -> Vec<LayoutView> {
+    catalog().iter().map(LayoutView::from).collect()
 }
 
 #[tauri::command]
-fn set_split(app: AppHandle, state: State<AppState>, mode: SplitMode) -> Result<SplitMode, String> {
-    if let Ok(mut g) = state.split.lock() {
-        *g = mode;
+fn get_opts(state: State<AppState>) -> SessionOpts {
+    state
+        .opts
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+        .sanitized()
+}
+
+#[tauri::command]
+fn set_opts(app: AppHandle, state: State<AppState>, opts: SessionOpts) -> Result<SessionOpts, String> {
+    let opts = opts.sanitized();
+    if let Ok(mut g) = state.opts.lock() {
+        *g = opts.clone();
     }
-    save_split(&app, mode);
-    Ok(mode)
+    save_opts(&app, &opts);
+    Ok(opts)
 }
 
-fn split_path(app: &AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_data_dir().ok().map(|d| d.join("split.json"))
+fn opts_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_data_dir().ok().map(|d| d.join("opts.json"))
 }
 
-fn load_split(app: &AppHandle) -> SplitMode {
-    let Some(path) = split_path(app) else {
-        return SplitMode::Both;
+fn load_opts(app: &AppHandle) -> SessionOpts {
+    let Some(path) = opts_path(app) else {
+        return SessionOpts::default();
     };
     std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(SplitMode::Both)
+        .unwrap_or_default()
+        .sanitized()
 }
 
-fn save_split(app: &AppHandle, mode: SplitMode) {
-    if let Some(path) = split_path(app) {
+fn save_opts(app: &AppHandle, opts: &SessionOpts) {
+    if let Some(path) = opts_path(app) {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = std::fs::write(path, serde_json::to_string(&mode).unwrap_or_default());
+        let _ = std::fs::write(path, serde_json::to_string(opts).unwrap_or_default());
     }
 }
 
@@ -198,11 +210,16 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         .and_then(|p| p.endpoint)
         .map(|e| e.to_string());
 
-    let split = state.split.lock().map(|g| *g).unwrap_or(SplitMode::Both);
+    let opts = state
+        .opts
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+        .sanitized();
     let mut connecting = StatusSnapshot::connecting(endpoint.clone());
     connecting.server = name.clone();
     connecting.profile_id = Some(profile_id.clone());
-    connecting.split = split;
+    connecting.opts = opts.clone();
     emit_status(&app, &state, connecting);
     if let Ok(mut h) = state.history.lock() {
         h.clear();
@@ -216,7 +233,7 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         if cfg!(windows) {
             match rpc(&IpcRequest::Connect {
                 path: conf_path,
-                split,
+                opts,
             }) {
                 Err(e) => {
                     let _ = app2.emit("status", StatusSnapshot::failed(e));
@@ -345,15 +362,15 @@ pub fn run() {
             last: Mutex::new(StatusSnapshot::idle()),
             history: Mutex::new(VecDeque::new()),
             lib: Mutex::new(None),
-            split: Mutex::new(SplitMode::Both),
+            opts: Mutex::new(SessionOpts::default()),
         })
         .setup(|app| {
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
             }
-            let mode = load_split(&app.handle());
-            if let Ok(mut g) = app.state::<AppState>().split.lock() {
-                *g = mode;
+            let opts = load_opts(&app.handle());
+            if let Ok(mut g) = app.state::<AppState>().opts.lock() {
+                *g = opts;
             }
             Ok(())
         })
@@ -367,8 +384,9 @@ pub fn run() {
             rename_profile,
             delete_profile,
             select_profile,
-            get_split,
-            set_split,
+            list_layouts,
+            get_opts,
+            set_opts,
             connect,
             disconnect
         ])

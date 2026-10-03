@@ -2,10 +2,9 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
-import { IDLE, Profile, SPLIT_OPTIONS, SplitMode, StatusSnapshot } from "./types";
+import { DEFAULT_OPTS, IDLE, LayoutView, Profile, SessionOpts, StatusSnapshot } from "./types";
 import "./App.css";
 
 type Tab = "home" | "routes" | "settings";
@@ -52,8 +51,8 @@ export default function App() {
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [dropOver, setDropOver] = useState(false);
-  const [pin, setPin] = useState(false);
-  const [split, setSplit] = useState<SplitMode>("both");
+  const [opts, setOpts] = useState<SessionOpts>(DEFAULT_OPTS);
+  const [layouts, setLayouts] = useState<LayoutView[]>([]);
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -65,7 +64,8 @@ export default function App() {
   useEffect(() => {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
     invoke("helper_ok").catch((e) => setNote(String(e)));
-    invoke<SplitMode>("get_split").then(setSplit).catch(() => {});
+    invoke<SessionOpts>("get_opts").then(setOpts).catch(() => {});
+    invoke<LayoutView[]>("list_layouts").then(setLayouts).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -228,14 +228,31 @@ export default function App() {
     await refresh();
   }
 
-  async function togglePin() {
-    const next = !pin;
+  async function saveOpts(next: SessionOpts) {
     try {
-      await getCurrentWindow().setAlwaysOnTop(next);
-      setPin(next);
+      const saved = await invoke<SessionOpts>("set_opts", { opts: next });
+      setOpts(saved);
     } catch (e) {
       setNote(String(e));
     }
+  }
+
+  async function toggleLayout(id: string) {
+    const on = opts.layouts.includes(id);
+    let layoutsNext: string[];
+    if (id === "all") {
+      layoutsNext = on ? ["steam", "discord"] : ["all"];
+    } else if (on) {
+      layoutsNext = opts.layouts.filter((x) => x !== id);
+    } else if (opts.layouts.includes("all")) {
+      layoutsNext = [id];
+    } else if (opts.layouts.length >= 3) {
+      setNote("Pick up to 3 layouts");
+      return;
+    } else {
+      layoutsNext = [...opts.layouts, id];
+    }
+    await saveOpts({ ...opts, layouts: layoutsNext });
   }
 
   const addPanel = (
@@ -292,7 +309,9 @@ export default function App() {
           </button>
 
           <p className="split-line">
-            {SPLIT_OPTIONS.find((o) => o.id === split)?.name ?? "Games + launchers"}
+            {opts.layouts
+              .map((id) => layouts.find((l) => l.id === id)?.name ?? id)
+              .join(" · ") || "Steam · Discord"}
           </p>
 
           {status.error && <p className="fault">{status.error}</p>}
@@ -339,32 +358,59 @@ export default function App() {
             <li className="stack">
               <div>
                 <strong>What to boost</strong>
-                <em>By destination IP — no game injection. Apply on the next Boost.</em>
+                <em>Up to 3 layouts. Destination IP only — no injection. Next Boost applies it.</em>
               </div>
               <div className="pills">
-                {SPLIT_OPTIONS.map((o) => (
+                {layouts.map((o) => (
                   <button
                     key={o.id}
                     type="button"
-                    className={`pill ${split === o.id ? "on" : ""}`}
-                    onClick={async () => {
-                      const next = await invoke<SplitMode>("set_split", { mode: o.id });
-                      setSplit(next);
-                    }}
+                    className={`pill ${opts.layouts.includes(o.id) ? "on" : ""}`}
+                    onClick={() => toggleLayout(o.id)}
+                    title={o.hint}
                   >
                     {o.name}
                   </button>
                 ))}
               </div>
-              <p className="hint">{SPLIT_OPTIONS.find((o) => o.id === split)?.hint}</p>
             </li>
             <li>
               <div>
-                <strong>Always on top</strong>
-                <em>Keep the HUD over your game</em>
+                <strong>Kill switch</strong>
+                <em>Block the internet if the tunnel drops</em>
               </div>
-              <button type="button" className={`switch ${pin ? "on" : ""}`} onClick={togglePin}>
-                {pin ? "On" : "Off"}
+              <button
+                type="button"
+                className={`switch ${opts.kill_switch ? "on" : ""}`}
+                onClick={() => saveOpts({ ...opts, kill_switch: !opts.kill_switch })}
+              >
+                {opts.kill_switch ? "On" : "Off"}
+              </button>
+            </li>
+            <li>
+              <div>
+                <strong>Auto reconnect</strong>
+                <em>Come back after Wi-Fi or sleep</em>
+              </div>
+              <button
+                type="button"
+                className={`switch ${opts.auto_reconnect ? "on" : ""}`}
+                onClick={() => saveOpts({ ...opts, auto_reconnect: !opts.auto_reconnect })}
+              >
+                {opts.auto_reconnect ? "On" : "Off"}
+              </button>
+            </li>
+            <li>
+              <div>
+                <strong>MTU sweep</strong>
+                <em>Pick a path MTU so packets do not fragment</em>
+              </div>
+              <button
+                type="button"
+                className={`switch ${opts.mtu_sweep ? "on" : ""}`}
+                onClick={() => saveOpts({ ...opts, mtu_sweep: !opts.mtu_sweep })}
+              >
+                {opts.mtu_sweep ? "On" : "Off"}
               </button>
             </li>
             <li>
