@@ -9,7 +9,7 @@ use crate::stats::TunnelStats;
 
 /// Owns a BoringTun `Tunn` built from an AmneziaWG 2.0 config.
 ///
-/// I/O (UDP, TUN, NDIS) stays in the platform crate / CLI. This type only
+/// I/O (UDP, TUN) stays in the platform crate / CLI. This type only
 /// drives encapsulate / decapsulate / timers.
 pub struct TunnelEngine {
     tun: Tunn,

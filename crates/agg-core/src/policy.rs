@@ -1,4 +1,4 @@
-//! Split by destination IP. No process injection, no WinpkFilter.
+//! Route-based split. Destination prefixes on the Wintun adapter.
 //!
 //! Pick up to [`MAX_LAYOUTS`] layouts (Steam, Riot, Discord, …). Their
 //! prefixes are unioned onto the tunnel; everything else stays on LAN.

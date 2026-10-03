@@ -1,4 +1,4 @@
-//! Linux TUN. Windows path is Phase 1 (`agg-platform-windows` + ndisapi).
+//! Linux TUN. Windows path is Wintun in `agg-platform-windows`.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};

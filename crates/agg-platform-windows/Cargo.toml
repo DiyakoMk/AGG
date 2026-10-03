@@ -3,7 +3,7 @@ name = "agg-platform-windows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Windows: Wintun tunnel + optional WinpkFilter detect. Stubs off Windows."
+description = "Windows: Wintun tunnel + route-based split. Stubs off Windows."
 license = "MIT"
 publish = false
 
@@ -15,7 +15,6 @@ tracing.workspace = true
 [target.'cfg(windows)'.dependencies]
 boringtun.workspace = true
 ipnet.workspace = true
-ndisapi = "0.7"
 wintun = "0.5"
 windows = { version = "0.62", features = [
     "Win32_Foundation",

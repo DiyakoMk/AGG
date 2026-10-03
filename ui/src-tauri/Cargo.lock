@@ -49,7 +49,6 @@ dependencies = [
  "agg-core",
  "boringtun",
  "ipnet",
- "ndisapi",
  "thiserror 2.0.21",
  "tracing",
  "windows",
@@ -2364,19 +2363,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "ndisapi"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52d837756627908646a1aa4912ba51eca7f765282ae82b4f00a9d15b9cd9687b"
-dependencies = [
- "bitflags 2.13.2",
- "futures",
- "ipnetwork",
- "uuid",
- "windows",
 ]
 
 [[package]]

@@ -43,32 +43,13 @@ enum Cmd {
         #[arg(long, default_value_t = 15)]
         timeout: u64,
     },
-    /// Bring the tunnel up. Linux: TUN. Windows: Wintun adapter AGG (needs wintun.dll).
+    /// Bring the tunnel up. Linux: TUN. Windows: Wintun adapter AGG.
     Up {
         #[arg(long)]
         config: PathBuf,
-        /// Unused on Windows Wintun path. Kept for NDIS `intercept`.
-        #[arg(long)]
-        interface_index: Option<usize>,
     },
-    /// Tear down AGG adapter / NDIS filter mode / Linux TUN routes.
+    /// Tear down AGG adapter / Linux TUN routes.
     Down,
-    /// Detect WinpkFilter (NDISRD). Windows.
-    Detect,
-    /// List NDIS adapters (1-based index). Windows.
-    Adapters,
-    /// Capture one packet, log it, drop it, restore filter mode. Windows.
-    Capture {
-        #[arg(long)]
-        interface_index: usize,
-    },
-    /// Full-tunnel NDIS intercept (no Wintun). Windows. Restores adapter mode on exit.
-    Intercept {
-        #[arg(long)]
-        config: PathBuf,
-        #[arg(long)]
-        interface_index: usize,
-    },
 }
 
 fn main() -> Result<()> {
@@ -83,18 +64,8 @@ fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Parse { config } => cmd_parse(&config),
         Cmd::Handshake { config, timeout } => cmd_handshake(&config, Duration::from_secs(timeout)),
-        Cmd::Up {
-            config,
-            interface_index,
-        } => cmd_up(&config, interface_index),
+        Cmd::Up { config } => cmd_up(&config),
         Cmd::Down => cmd_down(),
-        Cmd::Detect => cmd_detect(),
-        Cmd::Adapters => cmd_adapters(),
-        Cmd::Capture { interface_index } => cmd_capture(interface_index),
-        Cmd::Intercept {
-            config,
-            interface_index,
-        } => cmd_intercept(&config, interface_index),
     }
 }
 
@@ -264,20 +235,18 @@ fn cmd_handshake(path: &Path, timeout: Duration) -> Result<()> {
     }
 }
 
-fn cmd_up(path: &Path, interface_index: Option<usize>) -> Result<()> {
+fn cmd_up(path: &Path) -> Result<()> {
     #[cfg(windows)]
     {
-        let _ = interface_index;
         return cmd_up_wintun(path);
     }
     #[cfg(unix)]
     {
-        let _ = interface_index;
         return cmd_up_unix(path);
     }
     #[cfg(not(any(unix, windows)))]
     {
-        let _ = (path, interface_index);
+        let _ = path;
         bail!("unsupported OS");
     }
 }
@@ -434,10 +403,6 @@ fn cmd_down() -> Result<()> {
         if let Err(e) = agg_platform_windows::wintun_down() {
             say(&format!("wintun down: {e}"));
         }
-        match agg_platform_windows::restore_all_adapters() {
-            Ok(n) => say(&format!("NDIS filter mode restored on {n} adapter(s)")),
-            Err(e) => say(&format!("NDIS restore skipped: {e}")),
-        }
         return Ok(());
     }
     #[cfg(unix)]
@@ -463,64 +428,3 @@ fn cmd_down_unix() -> Result<()> {
     Ok(())
 }
 
-fn cmd_detect() -> Result<()> {
-    let st = agg_platform_windows::detect()?;
-    if st.present {
-        say(&format!("NDISRD present  version={:?}", st.version));
-        say(&st.hint);
-        for a in st.adapters {
-            say(&format!(
-                "  [{}] {}  {}  mac={} mtu={}",
-                a.index, a.friendly, a.name, a.mac, a.mtu
-            ));
-        }
-        Ok(())
-    } else {
-        say(&st.hint);
-        bail!("driver missing")
-    }
-}
-
-fn cmd_adapters() -> Result<()> {
-    for a in agg_platform_windows::list_adapters()? {
-        println!(
-            "[{}] {}  {}  mac={} mtu={}",
-            a.index, a.friendly, a.name, a.mac, a.mtu
-        );
-    }
-    Ok(())
-}
-
-fn cmd_capture(index: usize) -> Result<()> {
-    say("filter mode LISTEN until one packet is captured (original still delivered), then restored");
-    let msg = agg_platform_windows::capture_one(index)?;
-    say(&msg);
-    Ok(())
-}
-
-fn cmd_intercept(path: &Path, index: usize) -> Result<()> {
-    let cfg = WgConfig::from_path(path)?;
-    let running = Arc::new(AtomicBool::new(true));
-    {
-        let running = running.clone();
-        ctrlc::set_handler(move || {
-            running.store(false, Ordering::SeqCst);
-        })?;
-    }
-    say("UDP handshake first (no NDIS inject — that was restarting Windows)");
-    let endpoint = cfg
-        .peer()?
-        .endpoint
-        .context("peer has no Endpoint")?;
-    let mut engine = TunnelEngine::from_config(&cfg)?;
-    let udp = open_udp(endpoint)?;
-    if !run_handshake(&mut engine, &udp, endpoint, Duration::from_secs(15))? {
-        bail!("handshake failed; NDIS not armed");
-    }
-    say(&format!(
-        "handshake ok. NDIS LISTEN drain on {index} (copies only, traffic stays direct). Ctrl-C restores."
-    ));
-    agg_platform_windows::intercept_loop(index, &cfg, &running)?;
-    say("intercept stopped");
-    Ok(())
-}

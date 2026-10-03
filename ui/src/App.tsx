@@ -358,7 +358,7 @@ export default function App() {
             <li className="stack">
               <div>
                 <strong>What to boost</strong>
-                <em>Up to 3 layouts. Destination IP only — no injection. Next Boost applies it.</em>
+                <em>Up to 3 layouts. Route-based — only those prefixes use AGG. Next Boost applies it.</em>
               </div>
               <div className="pills">
                 {layouts.map((o) => (
