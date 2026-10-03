@@ -129,6 +129,11 @@ fn delete_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<
 }
 
 #[tauri::command]
+fn select_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+    open_lib(&app, &state)?.set_active(Some(id))
+}
+
+#[tauri::command]
 fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result<(), String> {
     let mut slot = state.session.lock().map_err(|e| e.to_string())?;
     if let Some(s) = slot.as_ref() {
@@ -291,6 +296,7 @@ pub fn run() {
             import_text,
             rename_profile,
             delete_profile,
+            select_profile,
             connect,
             disconnect
         ])
