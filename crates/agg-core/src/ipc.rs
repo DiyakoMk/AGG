@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::policy::SplitMode;
 use crate::status::StatusSnapshot;
 
 pub const PIPE_NAME: &str = r"\\.\pipe\AGGService";
@@ -35,7 +36,11 @@ pub fn rpc(req: &IpcRequest) -> Result<IpcResponse, String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum IpcRequest {
-    Connect { path: String },
+    Connect {
+        path: String,
+        #[serde(default)]
+        split: SplitMode,
+    },
     Disconnect,
     Status,
     Ping,

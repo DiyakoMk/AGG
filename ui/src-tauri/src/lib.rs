@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use agg_core::ipc::{rpc, IpcRequest};
-use agg_core::{run_udp_session, ConnectionState, StatusSnapshot, WgConfig};
+use agg_core::{run_udp_session, ConnectionState, SplitMode, StatusSnapshot, WgConfig};
 use profiles::{Library, Profile};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -20,6 +20,7 @@ struct AppState {
     last: Mutex<StatusSnapshot>,
     history: Mutex<VecDeque<u32>>,
     lib: Mutex<Option<Library>>,
+    split: Mutex<SplitMode>,
 }
 
 const HISTORY: usize = 60;
@@ -134,6 +135,43 @@ fn select_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<
 }
 
 #[tauri::command]
+fn get_split(state: State<AppState>) -> SplitMode {
+    state.split.lock().map(|g| *g).unwrap_or_default()
+}
+
+#[tauri::command]
+fn set_split(app: AppHandle, state: State<AppState>, mode: SplitMode) -> Result<SplitMode, String> {
+    if let Ok(mut g) = state.split.lock() {
+        *g = mode;
+    }
+    save_split(&app, mode);
+    Ok(mode)
+}
+
+fn split_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_data_dir().ok().map(|d| d.join("split.json"))
+}
+
+fn load_split(app: &AppHandle) -> SplitMode {
+    let Some(path) = split_path(app) else {
+        return SplitMode::Both;
+    };
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(SplitMode::Both)
+}
+
+fn save_split(app: &AppHandle, mode: SplitMode) {
+    if let Some(path) = split_path(app) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, serde_json::to_string(&mode).unwrap_or_default());
+    }
+}
+
+#[tauri::command]
 fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result<(), String> {
     let mut slot = state.session.lock().map_err(|e| e.to_string())?;
     if let Some(s) = slot.as_ref() {
@@ -160,9 +198,11 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         .and_then(|p| p.endpoint)
         .map(|e| e.to_string());
 
+    let split = state.split.lock().map(|g| *g).unwrap_or(SplitMode::Both);
     let mut connecting = StatusSnapshot::connecting(endpoint.clone());
     connecting.server = name.clone();
     connecting.profile_id = Some(profile_id.clone());
+    connecting.split = split;
     emit_status(&app, &state, connecting);
     if let Ok(mut h) = state.history.lock() {
         h.clear();
@@ -174,7 +214,10 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
     let conf_path = path.display().to_string();
     let worker = std::thread::spawn(move || {
         if cfg!(windows) {
-            match rpc(&IpcRequest::Connect { path: conf_path }) {
+            match rpc(&IpcRequest::Connect {
+                path: conf_path,
+                split,
+            }) {
                 Err(e) => {
                     let _ = app2.emit("status", StatusSnapshot::failed(e));
                     return;
@@ -297,17 +340,22 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
-            if let Some(win) = app.get_webview_window("main") {
-                fit_to_monitor(&win);
-            }
-            Ok(())
-        })
         .manage(AppState {
             session: Mutex::new(None),
             last: Mutex::new(StatusSnapshot::idle()),
             history: Mutex::new(VecDeque::new()),
             lib: Mutex::new(None),
+            split: Mutex::new(SplitMode::Both),
+        })
+        .setup(|app| {
+            if let Some(win) = app.get_webview_window("main") {
+                fit_to_monitor(&win);
+            }
+            let mode = load_split(&app.handle());
+            if let Ok(mut g) = app.state::<AppState>().split.lock() {
+                *g = mode;
+            }
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
@@ -319,6 +367,8 @@ pub fn run() {
             rename_profile,
             delete_profile,
             select_profile,
+            get_split,
+            set_split,
             connect,
             disconnect
         ])

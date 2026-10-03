@@ -31,7 +31,7 @@ npm install
 npm run tauri dev
 ```
 
-Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Always-on-top lives in Settings.
+Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Settings: what to boost (games / launchers / both / everything) and always-on-top.
 
 Uninstall helper: `agg-svc.exe uninstall` (elevated), or uninstall AGG from Apps — the NSIS pre-uninstall hook stops and deletes the service.
 

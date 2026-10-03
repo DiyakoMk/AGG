@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agg_core::config::WgConfig;
-use agg_core::TunnelEngine;
+use agg_core::{tunnel_nets, SplitMode, TunnelEngine};
 use boringtun::noise::TunnResult;
 use ipnet::IpNet;
 use wintun::{Adapter, Session};
@@ -25,12 +25,13 @@ pub const WINTUN_DOWNLOAD: &str = "https://www.wintun.net/";
 const BUF: usize = 2048;
 
 pub fn wintun_up(cfg: &WgConfig, running: &AtomicBool) -> Result<(), PlatformError> {
-    wintun_up_with_stats(cfg, running, |_| {})
+    wintun_up_with_stats(cfg, running, SplitMode::All, |_| {})
 }
 
 pub fn wintun_up_with_stats(
     cfg: &WgConfig,
     running: &AtomicBool,
+    split: SplitMode,
     mut on_stats: impl FnMut(agg_core::TunnelStats),
 ) -> Result<(), PlatformError> {
     let peer = cfg
@@ -64,8 +65,9 @@ pub fn wintun_up_with_stats(
     let mut tun = WintunTun::open(tun_ip, plen, mtu, &cfg.interface.dns)?;
     eprintln!("adapter {ADAPTER_NAME} if={}", tun.if_index);
 
-    let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &peer.allowed_ips)?;
-    eprintln!("routes on; forwarding until Ctrl-C");
+    let nets = tunnel_nets(split, &peer.allowed_ips);
+    let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets)?;
+    eprintln!("routes on ({}) ; forwarding until Ctrl-C", split.label());
 
     let mut last_timer = Instant::now();
     let mut last_stats = Instant::now();

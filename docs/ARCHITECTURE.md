@@ -45,6 +45,6 @@ NDIS `send_packet*` is not used. Homemade `IntermediateBuffer`s bugcheck WinpkFi
 ## Rules
 
 - Windows tunnel NIC is Wintun `AGG`. Must be deleted on exit.
-- No game-process injection
+- No game-process injection. Split is destination-IP only (`Games` / `Launchers` / `Both` / `All`).
 - Every routing / filter-mode change has a rollback
 - Private keys never in `Display`/`Debug`/logs

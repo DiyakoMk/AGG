@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
-import { IDLE, Profile, StatusSnapshot } from "./types";
+import { IDLE, Profile, SPLIT_OPTIONS, SplitMode, StatusSnapshot } from "./types";
 import "./App.css";
 
 type Tab = "home" | "routes" | "settings";
@@ -53,6 +53,7 @@ export default function App() {
   const [renameVal, setRenameVal] = useState("");
   const [dropOver, setDropOver] = useState(false);
   const [pin, setPin] = useState(false);
+  const [split, setSplit] = useState<SplitMode>("both");
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -64,6 +65,7 @@ export default function App() {
   useEffect(() => {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
     invoke("helper_ok").catch((e) => setNote(String(e)));
+    invoke<SplitMode>("get_split").then(setSplit).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -289,6 +291,10 @@ export default function App() {
             <em>{current?.endpoint ?? "Drop in a .conf from your VPN"}</em>
           </button>
 
+          <p className="split-line">
+            {SPLIT_OPTIONS.find((o) => o.id === split)?.name ?? "Games + launchers"}
+          </p>
+
           {status.error && <p className="fault">{status.error}</p>}
           {note && <p className="note">{note}</p>}
         </main>
@@ -330,6 +336,28 @@ export default function App() {
             <h1>Settings</h1>
           </header>
           <ul className="rows">
+            <li className="stack">
+              <div>
+                <strong>What to boost</strong>
+                <em>By destination IP — no game injection. Apply on the next Boost.</em>
+              </div>
+              <div className="pills">
+                {SPLIT_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    className={`pill ${split === o.id ? "on" : ""}`}
+                    onClick={async () => {
+                      const next = await invoke<SplitMode>("set_split", { mode: o.id });
+                      setSplit(next);
+                    }}
+                  >
+                    {o.name}
+                  </button>
+                ))}
+              </div>
+              <p className="hint">{SPLIT_OPTIONS.find((o) => o.id === split)?.hint}</p>
+            </li>
             <li>
               <div>
                 <strong>Always on top</strong>

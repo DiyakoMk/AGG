@@ -496,6 +496,45 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
+.split-line {
+  margin: 0.55rem 0 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+.rows li.stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.pill {
+  border: 1px solid var(--line);
+  background: #101014;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.pill.on {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.hint {
+  margin: 0.45rem 0 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
 .switch {
   min-width: 3.2rem;
   border: 0;

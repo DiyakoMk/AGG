@@ -99,6 +99,7 @@ pub fn wintun_up(
 pub fn wintun_up_with_stats(
     _cfg: &agg_core::WgConfig,
     _running: &std::sync::atomic::AtomicBool,
+    _split: agg_core::SplitMode,
     _on_stats: impl FnMut(agg_core::TunnelStats),
 ) -> Result<(), PlatformError> {
     Err(PlatformError::NotWindows)

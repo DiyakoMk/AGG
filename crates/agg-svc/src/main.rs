@@ -240,12 +240,13 @@ mod windows_impl {
                     status: Some(StatusSnapshot::idle()),
                 }
             }
-            IpcRequest::Connect { path } => connect(&path, last, tun),
+            IpcRequest::Connect { path, split } => connect(&path, split, last, tun),
         }
     }
 
     fn connect(
         path: &str,
+        split: agg_core::SplitMode,
         last: &Arc<Mutex<StatusSnapshot>>,
         tun: &Arc<Mutex<Option<Tunnel>>>,
     ) -> IpcResponse {
@@ -277,7 +278,9 @@ mod windows_impl {
             .and_then(|p| p.endpoint)
             .map(|e| e.to_string());
         if let Ok(mut s) = last.lock() {
-            *s = StatusSnapshot::connecting(endpoint.clone());
+            let mut snap = StatusSnapshot::connecting(endpoint.clone());
+            snap.split = split;
+            *s = snap;
         }
         let running = Arc::new(AtomicBool::new(true));
         let run = running.clone();
@@ -287,13 +290,14 @@ mod windows_impl {
                 let last2 = last2.clone();
                 let endpoint = endpoint.clone();
                 move |stats| {
-                    let snap = StatusSnapshot::from_stats(endpoint.clone(), stats);
+                    let mut snap = StatusSnapshot::from_stats(endpoint.clone(), stats);
+                    snap.split = split;
                     if let Ok(mut g) = last2.lock() {
                         *g = snap;
                     }
                 }
             };
-            match agg_platform_windows::wintun_up_with_stats(&cfg, &run, on_stats) {
+            match agg_platform_windows::wintun_up_with_stats(&cfg, &run, split, on_stats) {
                 Err(e) if run.load(Ordering::SeqCst) => {
                     if let Ok(mut g) = last2.lock() {
                         *g = StatusSnapshot::failed(e.to_string());
