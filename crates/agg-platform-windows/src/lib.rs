@@ -1,7 +1,7 @@
 //! Windows platform: Wintun virtual adapter for the real tunnel.
 //! Optional WinpkFilter detect/listen (no inject — that bugchecks).
 //!
-//! Off-Windows this crate is stubs. `wintun.dll` is **not** bundled.
+//! Off-Windows this crate is stubs. Official `wintun.dll` is bundled (Prebuilt Binaries License).
 
 use thiserror::Error;
 

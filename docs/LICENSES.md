@@ -10,7 +10,7 @@ Personal / non-commercial use. Do not redistribute WinpkFilter.
 | Windows Packet Filter (WinpkFilter) | Proprietary | Detect/listen only. **Do not bundle.** |
 | `wintun` crate | MIT | Bindings. |
 | Official `wintun.dll` 0.14.1 ([wintun.net](https://www.wintun.net/)) | Prebuilt Binaries License | **Bundled** under §3(d): shipped alongside software that uses only the Permitted API (`wintun.h`). License text in `third_party/wintun/LICENSE.txt`. **Not** GPLv2 source. |
-| `indexmap`, `ipnet`, `thiserror`, `base64`, `clap`, `tracing` | MIT / Apache-2.0 | See `Cargo.lock` |
+| `indexmap`, `ipnet`, `thiserror`, `base64`, `clap`, `tracing`, `windows-service` | MIT / Apache-2.0 | See `Cargo.lock` |
 
 No GPL / AGPL / SSPL source in this tree. Operator chose a real Wintun NIC (2026-10-03) and asked to ignore VAN 84. WinpkFilter remains unbundled.
 

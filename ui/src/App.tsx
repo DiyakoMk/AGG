@@ -31,6 +31,7 @@ export default function App() {
 
   useEffect(() => {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
+    invoke("helper_ok").catch((e) => setNote(String(e)));
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);

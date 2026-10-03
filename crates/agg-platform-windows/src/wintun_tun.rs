@@ -2,7 +2,7 @@
 //!
 //! Handshake first. Adapter created only after the session exists.
 //! Adapter and extra routes are removed on Drop / `wintun_down`.
-//! `wintun.dll` is not bundled — official build from https://www.wintun.net/
+//! Official `wintun.dll` is bundled from https://www.wintun.net/ (Prebuilt Binaries License).
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::path::PathBuf;

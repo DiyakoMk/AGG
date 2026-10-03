@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "windows/hooks.nsh"
+      }
+    },
+    "resources": {
+      "../../third_party/wintun/amd64/wintun.dll": "wintun.dll",
+      "resources/agg-svc.exe": "agg-svc.exe"
+    }
+  }
+}

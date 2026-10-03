@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "node scripts/prebundle.mjs && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -19,7 +19,7 @@
         "minHeight": 640,
         "resizable": true,
         "maximizable": false,
-        "center": true,
+        "center": true
       }
     ],
     "security": {

@@ -54,6 +54,23 @@ fn emit_status(app: &AppHandle, state: &AppState, mut snap: StatusSnapshot) {
 }
 
 #[tauri::command]
+fn helper_ok() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let r = rpc(&IpcRequest::Ping)?;
+        if r.ok {
+            Ok(())
+        } else {
+            Err(r.error.unwrap_or_else(|| "tunnel helper not ready".into()))
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn get_status(state: State<AppState>) -> StatusSnapshot {
     state
         .last
@@ -176,8 +193,7 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
                             if matches!(
                                 snap.state,
                                 ConnectionState::Idle | ConnectionState::Error
-                            ) && snap.error.is_some()
-                            {
+                            ) {
                                 break;
                             }
                         }
@@ -268,6 +284,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
+            helper_ok,
             list_profiles,
             active_profile,
             import_files,

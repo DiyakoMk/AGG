@@ -16,7 +16,7 @@ pub fn rpc(req: &IpcRequest) -> Result<IpcResponse, String> {
             .write(true)
             .open(PIPE_NAME)
             .map_err(|_| {
-                "tunnel helper is not running — once, as Administrator: agg-svc.exe install".to_string()
+                "tunnel helper is not running — reinstall AGG, or as Administrator: agg-svc.exe install".to_string()
             })?;
         let line = serde_json::to_string(req).map_err(|e| e.to_string())?;
         writeln!(f, "{line}").map_err(|e| e.to_string())?;

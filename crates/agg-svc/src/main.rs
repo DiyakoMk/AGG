@@ -66,11 +66,12 @@ mod windows_impl {
     use agg_core::ipc::{IpcRequest, IpcResponse, PIPE_NAME, SERVICE_NAME};
     use agg_core::{StatusSnapshot, WgConfig};
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL};
     use windows::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
     use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
+    use windows::Win32::System::Memory::LocalFree;
     use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
@@ -204,7 +205,7 @@ mod windows_impl {
                     continue;
                 }
             };
-            let resp = dispatch(req, &last, &tun);
+            let resp = handle_request(req, &last, &tun);
             if write_resp(&mut writer, resp).is_err() {
                 break;
             }
@@ -218,7 +219,7 @@ mod windows_impl {
         writeln!(w, "{line}")
     }
 
-    fn dispatch(
+    fn handle_request(
         req: IpcRequest,
         last: &Arc<Mutex<StatusSnapshot>>,
         tun: &Arc<Mutex<Option<Tunnel>>>,
@@ -323,11 +324,14 @@ mod windows_impl {
 
     fn accept_client() -> Result<std::fs::File, String> {
         let handle = unsafe { create_pipe() }.map_err(|e| e.to_string())?;
-        if unsafe { ConnectNamedPipe(handle, None) }.is_err() {
-            unsafe {
-                let _ = CloseHandle(handle);
+        if let Err(e) = unsafe { ConnectNamedPipe(handle, None) } {
+            // Client already connected between CreateNamedPipe and ConnectNamedPipe.
+            if e.code() != ERROR_PIPE_CONNECTED.to_hresult() {
+                unsafe {
+                    let _ = CloseHandle(handle);
+                }
+                return Err(format!("ConnectNamedPipe: {e}"));
             }
-            return Err("ConnectNamedPipe".into());
         }
         Ok(unsafe { std::fs::File::from_raw_handle(handle.0 as *mut std::ffi::c_void) })
     }
@@ -349,7 +353,7 @@ mod windows_impl {
             lpSecurityDescriptor: sd.0,
             bInheritHandle: false.into(),
         };
-        CreateNamedPipeW(
+        let handle = CreateNamedPipeW(
             PCWSTR(name.as_mut_ptr()),
             PIPE_ACCESS_DUPLEX,
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
@@ -358,21 +362,26 @@ mod windows_impl {
             64 * 1024,
             0,
             Some(&sa),
-        )
+        );
+        let _ = LocalFree(HLOCAL(sd.0));
+        if handle.is_invalid() {
+            return Err(windows::core::Error::from_win32());
+        }
+        Ok(handle)
     }
 
     pub fn install() -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
         let manager = ServiceManager::local_computer(
             None::<&str>,
-            ServiceManagerAccess::CREATE_SERVICE,
+            ServiceManagerAccess::CREATE_SERVICE | ServiceManagerAccess::CONNECT,
         )
         .map_err(|e| e.to_string())?;
         let info = ServiceInfo {
             name: SERVICE_NAME.into(),
             display_name: "AGG Tunnel".into(),
             service_type: ServiceType::OWN_PROCESS,
-            start_type: ServiceStartType::Auto,
+            start_type: ServiceStartType::AutoStart,
             error_control: ServiceErrorControl::Normal,
             executable_path: exe,
             launch_arguments: vec![],
@@ -380,12 +389,16 @@ mod windows_impl {
             account_name: None,
             account_password: None,
         };
-        let service = manager
-            .create_service(&info, ServiceAccess::START | ServiceAccess::CHANGE_CONFIG)
-            .map_err(|e| e.to_string())?;
-        service
-            .start::<std::ffi::OsString>(&[])
-            .map_err(|e| e.to_string())?;
+        let service = match manager.create_service(
+            &info,
+            ServiceAccess::START | ServiceAccess::CHANGE_CONFIG,
+        ) {
+            Ok(s) => s,
+            Err(_) => manager
+                .open_service(SERVICE_NAME, ServiceAccess::START)
+                .map_err(|e| e.to_string())?,
+        };
+        let _ = service.start::<std::ffi::OsString>(&[]);
         println!("installed and started {SERVICE_NAME}");
         Ok(())
     }

@@ -16,9 +16,11 @@ Linux TUN+UDP (agg-cli)      — Phase 0 proof
 
 | Crate | Role |
 |---|---|
-| `agg-core` | Config, BoringTun, Ethernet intercept state machine |
+| `agg-core` | Config, BoringTun, Ethernet intercept state machine, named-pipe IPC types |
 | `agg-cli` | Headless harness |
 | `agg-platform-windows` | Wintun `AGG` + optional WinpkFilter detect. Stub off-Windows. |
+| `agg-svc` | Windows service. Owns Wintun; UI is unprivileged. |
+| `agg-ui` | Tauri v2 shell (`ui/src-tauri`) |
 
 ## Data flow (Phase 0)
 
@@ -34,7 +36,9 @@ Linux TUN+UDP (agg-cli)      — Phase 0 proof
 2. Create Wintun adapter `AGG`, set tunnel IPv4 + MTU + DNS.
 3. Pin `/32` to the VPS via the LAN gateway; `0.0.0.0/1` + `128.0.0.0/1` via `AGG`.
 4. Inner IP from Wintun → BoringTun encapsulate → UDP. Reverse on recv.
-5. Ctrl-C / `down` deletes routes and the adapter.
+5. Ctrl-C / `down` / service stop deletes routes and the adapter.
+
+Daily connect goes UI → named pipe → `AGGService` (SYSTEM). The UI process does not create the adapter.
 
 NDIS `send_packet*` is not used. Homemade `IntermediateBuffer`s bugcheck WinpkFilter.
 
