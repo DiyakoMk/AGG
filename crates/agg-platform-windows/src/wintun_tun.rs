@@ -253,7 +253,7 @@ fn load_dll() -> Result<wintun::Wintun, PlatformError> {
     let lib = unsafe { wintun::load_from_path(&path) }
         .map_err(|e| PlatformError::msg(format!("load {}: {e}", path.display())))?;
     // Adapter::open logs ERROR 0x490 when the NIC is absent. Harmless.
-    wintun::reset_logger();
+    wintun::reset_logger(&lib);
     Ok(lib)
 }
 
