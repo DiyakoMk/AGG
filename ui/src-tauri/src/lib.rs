@@ -169,7 +169,7 @@ fn load_opts(app: &AppHandle) -> SessionOpts {
     };
     std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .and_then(|s| serde_json::from_str::<SessionOpts>(&s).ok())
         .unwrap_or_default()
         .sanitized()
 }
