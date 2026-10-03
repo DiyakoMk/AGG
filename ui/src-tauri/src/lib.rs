@@ -269,6 +269,22 @@ fn disconnect(app: AppHandle, state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+fn fit_to_monitor(win: &tauri::WebviewWindow) {
+    let Ok(Some(monitor)) = win.current_monitor() else {
+        let _ = win.center();
+        return;
+    };
+    let scale = monitor.scale_factor();
+    let area = monitor.work_area();
+    let work_w = area.size.width as f64 / scale;
+    let work_h = area.size.height as f64 / scale;
+    let width = 400.0_f64.min(work_w * 0.92).max(360.0);
+    let height = (work_h * 0.86).min(work_h - 32.0).clamp(520.0, 900.0);
+    let _ = win.set_min_size(Some(tauri::LogicalSize::new(360.0, 520.0)));
+    let _ = win.set_size(tauri::LogicalSize::new(width, height));
+    let _ = win.center();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = tracing_subscriber::fmt()
@@ -281,6 +297,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            if let Some(win) = app.get_webview_window("main") {
+                fit_to_monitor(&win);
+            }
+            Ok(())
+        })
         .manage(AppState {
             session: Mutex::new(None),
             last: Mutex::new(StatusSnapshot::idle()),

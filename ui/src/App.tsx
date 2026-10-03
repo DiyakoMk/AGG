@@ -2,38 +2,39 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
 import { IDLE, Profile, StatusSnapshot } from "./types";
 import "./App.css";
 
-type Tab = "home" | "servers" | "settings";
-type Sheet = "none" | "servers" | "paste";
+type Tab = "home" | "routes" | "settings";
+type Sheet = "none" | "routes" | "add";
 
 function fmtRtt(n: number | null | undefined): string {
   if (n == null) return "—";
   return String(Math.round(n));
 }
 
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+function pingTone(n: number | null | undefined): "good" | "ok" | "high" | "off" {
+  if (n == null) return "off";
+  if (n < 50) return "good";
+  if (n < 90) return "ok";
+  return "high";
 }
 
 function stateCopy(state: StatusSnapshot["state"]): string {
   switch (state) {
     case "connecting":
-      return "Handshaking";
+      return "Finding a better path";
     case "connected":
-      return "Connected";
+      return "Ping boosted";
     case "disconnecting":
-      return "Disconnecting";
+      return "Dropping the boost";
     case "error":
-      return "Connection failed";
+      return "Boost failed";
     default:
-      return "Disconnected";
+      return "Direct connection";
   }
 }
 
@@ -48,9 +49,10 @@ export default function App() {
   const [pasteName, setPasteName] = useState("");
   const [pasteBody, setPasteBody] = useState("");
   const [note, setNote] = useState<string | null>(null);
-  const [helper, setHelper] = useState<"ok" | "down" | "checking">("checking");
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
+  const [dropOver, setDropOver] = useState(false);
+  const [pin, setPin] = useState(false);
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -61,12 +63,7 @@ export default function App() {
 
   useEffect(() => {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
-    invoke("helper_ok")
-      .then(() => setHelper("ok"))
-      .catch((e) => {
-        setHelper("down");
-        setNote(String(e));
-      });
+    invoke("helper_ok").catch((e) => setNote(String(e)));
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -87,6 +84,7 @@ export default function App() {
     () => (status.rtt_history?.length ? status.rtt_history : history),
     [status.rtt_history, history]
   );
+  const tone = pingTone(status.rtt_ms);
 
   async function importPaths(paths: string[]) {
     if (!paths.length) return;
@@ -100,7 +98,9 @@ export default function App() {
       }
       setSheet("none");
       setTab("home");
-      setNote(added.length === 1 ? `Added ${added[0].name}` : `Added ${added.length} configs`);
+      setNote(
+        added.length === 1 ? `${added[0].name} is ready to boost` : `${added.length} routes added`
+      );
     } catch (e) {
       setNote(String(e));
     } finally {
@@ -111,7 +111,7 @@ export default function App() {
   async function pickFiles() {
     const picked = await open({
       multiple: true,
-      filters: [{ name: "AmneziaWG", extensions: ["conf"] }],
+      filters: [{ name: "VPN config", extensions: ["conf"] }],
     });
     if (!picked) return;
     await importPaths(Array.isArray(picked) ? picked : [picked]);
@@ -132,9 +132,45 @@ export default function App() {
       await invoke("select_profile", { id: p.id }).catch(() => {});
       setSheet("none");
       setTab("home");
-      setNote(`Added ${p.name}`);
+      setNote(`${p.name} is ready to boost`);
     } catch (err) {
       setNote(String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDropFiles(files: FileList | File[]) {
+    const list = Array.from(files);
+    const texts: { name: string; body: string }[] = [];
+    for (const f of list) {
+      if (!f.name.toLowerCase().endsWith(".conf") && f.type && !f.type.includes("text")) {
+        continue;
+      }
+      texts.push({ name: f.name.replace(/\.conf$/i, ""), body: await f.text() });
+    }
+    if (!texts.length) {
+      setNote("Drop a .conf file from your VPN");
+      return;
+    }
+    setBusy(true);
+    try {
+      let last: Profile | null = null;
+      for (const t of texts) {
+        last = await invoke<Profile>("import_text", { name: t.name, body: t.body });
+      }
+      await refresh();
+      if (last) {
+        setSelected(last.id);
+        await invoke("select_profile", { id: last.id }).catch(() => {});
+      }
+      setSheet("none");
+      setTab("home");
+      setNote(
+        texts.length === 1 ? `${texts[0].name} is ready to boost` : `${texts.length} routes added`
+      );
+    } catch (e) {
+      setNote(String(e));
     } finally {
       setBusy(false);
     }
@@ -149,7 +185,8 @@ export default function App() {
 
   async function onConnect() {
     if (!selected) {
-      setSheet("servers");
+      setSheet("add");
+      setTab("routes");
       return;
     }
     setBusy(true);
@@ -189,11 +226,56 @@ export default function App() {
     await refresh();
   }
 
+  async function togglePin() {
+    const next = !pin;
+    try {
+      await getCurrentWindow().setAlwaysOnTop(next);
+      setPin(next);
+    } catch (e) {
+      setNote(String(e));
+    }
+  }
+
+  const addPanel = (
+    <AddConfig
+      dropOver={dropOver}
+      setDropOver={setDropOver}
+      pasteName={pasteName}
+      pasteBody={pasteBody}
+      setPasteName={setPasteName}
+      setPasteBody={setPasteBody}
+      busy={busy}
+      onPick={pickFiles}
+      onPaste={onPaste}
+      onDropFiles={onDropFiles}
+    />
+  );
+
   return (
     <div className="shell">
       {tab === "home" && (
         <main className="home">
+          <header className="hud-top">
+            <span className="brand">AGG</span>
+            <span className="tag">ping booster</span>
+          </header>
+
           <p className={`status is-${status.state}`}>{stateCopy(status.state)}</p>
+
+          <div className={`hud-ping is-${tone}`}>
+            <span className="n">{fmtRtt(status.rtt_ms)}</span>
+            <span className="u">ms</span>
+          </div>
+          <p className="ping-hint">
+            {status.state === "connected"
+              ? tone === "good"
+                ? "Low ping"
+                : tone === "ok"
+                  ? "Playable"
+                  : "High ping — try another route"
+              : "Tap Boost before a match"}
+          </p>
+          <Sparkline values={series} width={280} height={44} />
 
           <ConnectRing
             state={status.state}
@@ -201,78 +283,44 @@ export default function App() {
             onClick={live ? onDisconnect : onConnect}
           />
 
-          <button
-            type="button"
-            className="server-chip"
-            onClick={() => setSheet("servers")}
-          >
-            <span className="server-chip-k">Server</span>
-            <strong>{current?.name ?? "Add a config"}</strong>
-            <em>{current ? "AmneziaWG" : "No location"}</em>
+          <button type="button" className="server-chip" onClick={() => setSheet("routes")}>
+            <span className="server-chip-k">Route</span>
+            <strong>{current?.name ?? "Add a game route"}</strong>
+            <em>{current?.endpoint ?? "Drop in a .conf from your VPN"}</em>
           </button>
 
-          {status.state === "connected" && (
-            <section className="live">
-              <div className="rtt">
-                <span className="n">{fmtRtt(status.rtt_ms)}</span>
-                <span className="u">ms</span>
-              </div>
-              <Sparkline values={series} width={280} height={48} />
-              <ul className="stats">
-                <li>
-                  <span>Download</span>
-                  <b>{fmtBytes(status.rx_bytes)}</b>
-                </li>
-                <li>
-                  <span>Upload</span>
-                  <b>{fmtBytes(status.tx_bytes)}</b>
-                </li>
-                <li>
-                  <span>Handshake</span>
-                  <b>
-                    {status.handshake_age_ms != null
-                      ? `${Math.round(status.handshake_age_ms / 1000)}s`
-                      : "—"}
-                  </b>
-                </li>
-              </ul>
-            </section>
-          )}
-
-          <p className="split">All traffic · split tunnel later</p>
           {status.error && <p className="fault">{status.error}</p>}
           {note && <p className="note">{note}</p>}
         </main>
       )}
 
-      {tab === "servers" && (
+      {tab === "routes" && (
         <main className="page">
           <header className="page-h">
-            <h1>Servers</h1>
-            <div className="page-actions">
-              <button type="button" className="ghost" onClick={pickFiles}>
-                File
-              </button>
-              <button type="button" className="ghost" onClick={() => setSheet("paste")}>
-                Paste
-              </button>
-            </div>
+            <h1>Routes</h1>
+            <button type="button" className="ghost" onClick={() => setSheet("add")}>
+              Add
+            </button>
           </header>
-          <ServerList
-            profiles={profiles}
-            selected={selected}
-            renameId={renameId}
-            renameVal={renameVal}
-            onChoose={choose}
-            onRenameStart={(p) => {
-              setRenameId(p.id);
-              setRenameVal(p.name);
-            }}
-            onRenameChange={setRenameVal}
-            onRenameSubmit={onRename}
-            onRenameCancel={() => setRenameId(null)}
-            onDelete={onDelete}
-          />
+          {profiles.length === 0 ? (
+            addPanel
+          ) : (
+            <ServerList
+              profiles={profiles}
+              selected={selected}
+              renameId={renameId}
+              renameVal={renameVal}
+              onChoose={choose}
+              onRenameStart={(p) => {
+                setRenameId(p.id);
+                setRenameVal(p.name);
+              }}
+              onRenameChange={setRenameVal}
+              onRenameSubmit={onRename}
+              onRenameCancel={() => setRenameId(null)}
+              onDelete={onDelete}
+            />
+          )}
         </main>
       )}
 
@@ -284,41 +332,17 @@ export default function App() {
           <ul className="rows">
             <li>
               <div>
-                <strong>Tunnel helper</strong>
-                <em>
-                  {helper === "ok"
-                    ? "AGGService is running"
-                    : helper === "checking"
-                      ? "Checking…"
-                      : "Not running — reinstall AGG"}
-                </em>
+                <strong>Always on top</strong>
+                <em>Keep the HUD over your game</em>
               </div>
-              <b className={helper === "ok" ? "ok" : "bad"}>
-                {helper === "ok" ? "On" : helper === "checking" ? "…" : "Off"}
-              </b>
-            </li>
-            <li>
-              <div>
-                <strong>Protocol</strong>
-                <em>AmneziaWG 2.0 · Wintun adapter AGG</em>
-              </div>
-            </li>
-            <li>
-              <div>
-                <strong>Kill switch</strong>
-                <em>Not in this build</em>
-              </div>
-            </li>
-            <li>
-              <div>
-                <strong>Split tunneling</strong>
-                <em>All traffic until the next phase</em>
-              </div>
+              <button type="button" className={`switch ${pin ? "on" : ""}`} onClick={togglePin}>
+                {pin ? "On" : "Off"}
+              </button>
             </li>
             <li>
               <div>
                 <strong>About</strong>
-                <em>AGG 0.1 · personal Windows client</em>
+                <em>AGG 0.1 · personal Windows ping booster</em>
               </div>
             </li>
           </ul>
@@ -327,14 +351,14 @@ export default function App() {
 
       <nav className="tabs">
         <button type="button" className={tab === "home" ? "on" : ""} onClick={() => setTab("home")}>
-          Home
+          Boost
         </button>
         <button
           type="button"
-          className={tab === "servers" ? "on" : ""}
-          onClick={() => setTab("servers")}
+          className={tab === "routes" ? "on" : ""}
+          onClick={() => setTab("routes")}
         >
-          Servers
+          Routes
         </button>
         <button
           type="button"
@@ -349,59 +373,109 @@ export default function App() {
         <div className="scrim" onClick={() => setSheet("none")}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="grab" />
-            {sheet === "servers" && (
+            {sheet === "routes" && (
               <>
                 <div className="sheet-h">
-                  <h2>Servers</h2>
-                  <div>
-                    <button type="button" className="ghost" onClick={pickFiles}>
-                      File
-                    </button>
-                    <button type="button" className="ghost" onClick={() => setSheet("paste")}>
-                      Paste
-                    </button>
-                  </div>
+                  <h2>Routes</h2>
+                  <button type="button" className="ghost" onClick={() => setSheet("add")}>
+                    Add
+                  </button>
                 </div>
-                <ServerList
-                  profiles={profiles}
-                  selected={selected}
-                  renameId={renameId}
-                  renameVal={renameVal}
-                  onChoose={choose}
-                  onRenameStart={(p) => {
-                    setRenameId(p.id);
-                    setRenameVal(p.name);
-                  }}
-                  onRenameChange={setRenameVal}
-                  onRenameSubmit={onRename}
-                  onRenameCancel={() => setRenameId(null)}
-                  onDelete={onDelete}
-                />
+                {profiles.length === 0 ? (
+                  addPanel
+                ) : (
+                  <ServerList
+                    profiles={profiles}
+                    selected={selected}
+                    renameId={renameId}
+                    renameVal={renameVal}
+                    onChoose={choose}
+                    onRenameStart={(p) => {
+                      setRenameId(p.id);
+                      setRenameVal(p.name);
+                    }}
+                    onRenameChange={setRenameVal}
+                    onRenameSubmit={onRename}
+                    onRenameCancel={() => setRenameId(null)}
+                    onDelete={onDelete}
+                  />
+                )}
               </>
             )}
-            {sheet === "paste" && (
-              <form onSubmit={onPaste} className="paste">
-                <h2>Paste config</h2>
-                <input
-                  placeholder="Name"
-                  value={pasteName}
-                  onChange={(e) => setPasteName(e.target.value)}
-                />
-                <textarea
-                  required
-                  rows={12}
-                  placeholder={"[Interface]\nPrivateKey = "}
-                  value={pasteBody}
-                  onChange={(e) => setPasteBody(e.target.value)}
-                />
-                <button type="submit" disabled={busy || !pasteBody.trim()}>
-                  Save
-                </button>
-              </form>
+            {sheet === "add" && (
+              <>
+                <h2>Add a route</h2>
+                {addPanel}
+              </>
             )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AddConfig({
+  dropOver,
+  setDropOver,
+  pasteName,
+  pasteBody,
+  setPasteName,
+  setPasteBody,
+  busy,
+  onPick,
+  onPaste,
+  onDropFiles,
+}: {
+  dropOver: boolean;
+  setDropOver: (v: boolean) => void;
+  pasteName: string;
+  pasteBody: string;
+  setPasteName: (v: string) => void;
+  setPasteBody: (v: string) => void;
+  busy: boolean;
+  onPick: () => void;
+  onPaste: (e: FormEvent) => void;
+  onDropFiles: (files: FileList | File[]) => void;
+}) {
+  return (
+    <div className="add">
+      <button
+        type="button"
+        className={`drop ${dropOver ? "over" : ""}`}
+        onClick={onPick}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDropOver(true);
+        }}
+        onDragLeave={() => setDropOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDropOver(false);
+          if (e.dataTransfer.files.length) onDropFiles(e.dataTransfer.files);
+        }}
+      >
+        <strong>Drop a .conf here</strong>
+        <em>or click to browse — the file your VPN emailed you</em>
+      </button>
+      <p className="or">or paste it</p>
+      <form onSubmit={onPaste} className="paste">
+        <input
+          placeholder="Name this route (EU West, NA East…)"
+          value={pasteName}
+          onChange={(e) => setPasteName(e.target.value)}
+        />
+        <textarea
+          required
+          rows={8}
+          placeholder="Paste the whole config, starting with [Interface]"
+          value={pasteBody}
+          onChange={(e) => setPasteBody(e.target.value)}
+        />
+        <button type="submit" disabled={busy || !pasteBody.trim()}>
+          Save route
+        </button>
+      </form>
     </div>
   );
 }
@@ -429,9 +503,6 @@ function ServerList({
   onRenameCancel: () => void;
   onDelete: (id: string) => void;
 }) {
-  if (profiles.length === 0) {
-    return <p className="empty">Import an AmneziaWG .conf to start.</p>;
-  }
   return (
     <ul className="locs">
       {profiles.map((p) => (
@@ -452,9 +523,7 @@ function ServerList({
             <>
               <button type="button" className="loc-pick" onClick={() => onChoose(p.id)}>
                 <strong>{p.name}</strong>
-                <em>
-                  {p.obfuscated ? "AmneziaWG" : "WireGuard"} · {p.endpoint ?? "no endpoint"}
-                </em>
+                <em>{p.endpoint ?? "ready"}</em>
               </button>
               <div className="loc-act">
                 <button type="button" className="ghost" onClick={() => onRenameStart(p)}>

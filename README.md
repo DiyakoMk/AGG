@@ -31,7 +31,7 @@ npm install
 npm run tauri dev
 ```
 
-The window is phone-sized, Amnezia-style: Connect ring, server chip, Home / Servers / Settings. Import `.conf` from Servers or the home drawer.
+Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Always-on-top lives in Settings.
 
 Uninstall helper: `agg-svc.exe uninstall` (elevated), or uninstall AGG from Apps — the NSIS pre-uninstall hook stops and deletes the service.
 
