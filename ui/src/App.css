@@ -1,0 +1,175 @@
+:root {
+  --bg: #0a0a0c;
+  --bg-2: #141418;
+  --fg: #e8e8ea;
+  --muted: #7a7a82;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --danger: #f87171;
+  font-family: Inter, Geist, ui-sans-serif, system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+}
+
+.shell {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.state {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.state-connected {
+  color: var(--cyan);
+}
+.state-connecting,
+.state-disconnecting {
+  color: var(--amber);
+}
+.state-error {
+  color: var(--danger);
+}
+.state-idle {
+  color: var(--muted);
+}
+
+.metric {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 3rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--cyan);
+}
+
+.metric-unit {
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--muted);
+}
+
+.endpoint {
+  margin: 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--bg-2);
+}
+
+.strip dt {
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.strip dd {
+  margin: 0.2rem 0 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.err {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.path {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.path input {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg);
+  background: var(--bg-2);
+  border: 1px solid #222228;
+  padding: 0.55rem 0.7rem;
+}
+
+.btn {
+  border: 0;
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.connect {
+  background: var(--cyan);
+  color: #041016;
+}
+
+.btn.disconnect {
+  background: #1c1c22;
+  color: var(--fg);
+  outline: 1px solid #333;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.hint code {
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--fg);
+}

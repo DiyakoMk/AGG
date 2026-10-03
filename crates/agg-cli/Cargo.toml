@@ -1,0 +1,26 @@
+[package]
+name = "agg-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Headless AGG harness. Phase 0: Linux TUN proof."
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "agg-cli"
+path = "src/main.rs"
+
+[dependencies]
+agg-core.workspace = true
+agg-platform-windows.workspace = true
+anyhow = "1"
+boringtun.workspace = true
+ipnet.workspace = true
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

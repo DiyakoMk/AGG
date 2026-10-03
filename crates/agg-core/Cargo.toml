@@ -1,0 +1,20 @@
+[package]
+name = "agg-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Platform-agnostic AGG tunnel core: AmneziaWG 2.0 config, BoringTun lifecycle, stats"
+license = "MIT"
+publish = false
+
+[dependencies]
+base64.workspace = true
+boringtun.workspace = true
+indexmap.workspace = true
+ipnet.workspace = true
+serde = { version = "1", features = ["derive"] }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest = "1"

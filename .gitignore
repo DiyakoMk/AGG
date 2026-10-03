@@ -1,0 +1,14 @@
+/target/
+**/*.rs.bk
+.idea/
+.vscode/
+*.swp
+# Real tunnel configs — never commit keys
+*.conf
+!crates/agg-core/tests/fixtures/*.conf
+.env
+/tmp-agg-state*
+ui/node_modules/
+ui/dist/
+ui/src-tauri/target/
+.claude/

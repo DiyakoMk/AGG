@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/agg-core", "crates/agg-cli", "crates/agg-platform-windows"]
+exclude = ["ui/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+version = "0.1.0"
+
+[workspace.dependencies]
+agg-core = { path = "crates/agg-core" }
+agg-platform-windows = { path = "crates/agg-platform-windows" }
+base64 = "0.22"
+boringtun = { git = "https://github.com/Wiresock-Foundation/wiresock-boringtun", rev = "ae2ab44e9a68ca1a3232d2e8b13f9db30a9b9dcf", default-features = false }
+indexmap = "2"
+ipnet = "2.11"
+thiserror = "2"
+tracing = "0.1"
