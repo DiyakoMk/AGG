@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::policy::{SessionOpts, SiteMode};
+use crate::policy::{BypassApp, SessionOpts, SiteMode};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppConfig {
@@ -12,14 +12,12 @@ pub struct AppConfig {
     pub kill_switch: bool,
     #[serde(default = "on")]
     pub auto_reconnect: bool,
-    #[serde(default = "on")]
-    pub mtu_sweep: bool,
     #[serde(default)]
     pub site_mode: SiteMode,
     #[serde(default)]
     pub split_sites: Vec<String>,
     #[serde(default)]
-    pub bypass_apps: Vec<String>,
+    pub bypass_apps: Vec<BypassApp>,
 }
 
 fn one() -> u32 {
@@ -35,7 +33,6 @@ impl Default for AppConfig {
             version: 1,
             kill_switch: false,
             auto_reconnect: true,
-            mtu_sweep: true,
             site_mode: SiteMode::All,
             split_sites: Vec::new(),
             bypass_apps: Vec::new(),
@@ -48,11 +45,9 @@ impl AppConfig {
         SessionOpts {
             kill_switch: self.kill_switch,
             auto_reconnect: self.auto_reconnect,
-            mtu_sweep: self.mtu_sweep,
             site_mode: self.site_mode,
             split_sites: self.split_sites.clone(),
             bypass_apps: self.bypass_apps.clone(),
-            direct_exes: Vec::new(),
         }
     }
 }

@@ -7,41 +7,25 @@ export type ConnectionState =
 
 export type SiteMode = "all" | "only_listed" | "except_listed";
 
+export type BypassApp = {
+  name: string;
+  path: string;
+};
+
 export type SessionOpts = {
   kill_switch: boolean;
   auto_reconnect: boolean;
-  mtu_sweep: boolean;
   site_mode: SiteMode;
   split_sites: string[];
-  bypass_apps?: string[];
-  direct_exes?: string[];
+  bypass_apps: BypassApp[];
 };
 
 export const DEFAULT_OPTS: SessionOpts = {
   kill_switch: false,
   auto_reconnect: true,
-  mtu_sweep: true,
   site_mode: "all",
   split_sites: [],
-};
-
-export type AppSource =
-  | "steam"
-  | "epic"
-  | "riot"
-  | "battle_net"
-  | "gog"
-  | "discord"
-  | "manual";
-
-export type DetectedApp = {
-  id: string;
-  name: string;
-  source: AppSource;
-  executable: string;
-  install_dir: string;
-  icon_path: string | null;
-  missing: boolean;
+  bypass_apps: [],
 };
 
 export type StatusSnapshot = {
@@ -83,28 +67,3 @@ export const IDLE: StatusSnapshot = {
   rtt_history: [],
   opts: DEFAULT_OPTS,
 };
-
-export type FilterStatus = {
-  present: boolean;
-  download: string;
-  hint: string;
-};
-
-export function sourceLabel(s: AppSource): string {
-  switch (s) {
-    case "steam":
-      return "Steam";
-    case "epic":
-      return "Epic";
-    case "riot":
-      return "Riot";
-    case "battle_net":
-      return "Battle.net";
-    case "gog":
-      return "GOG";
-    case "discord":
-      return "Discord";
-    default:
-      return "Manual";
-  }
-}

@@ -4,16 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
-import {
-  DEFAULT_OPTS,
-  DetectedApp,
-  IDLE,
-  Profile,
-  SessionOpts,
-  SiteMode,
-  sourceLabel,
-  StatusSnapshot,
-} from "./types";
+import { DEFAULT_OPTS, IDLE, Profile, SessionOpts, SiteMode, StatusSnapshot } from "./types";
 import "./App.css";
 
 type Tab = "home" | "servers" | "split" | "settings";
@@ -22,13 +13,6 @@ type Sheet = "none" | "servers" | "add";
 function fmtRtt(n: number | null | undefined): string {
   if (n == null) return "—";
   return String(Math.round(n));
-}
-
-function pingTone(n: number | null | undefined): "good" | "ok" | "high" | "off" {
-  if (n == null) return "off";
-  if (n < 50) return "good";
-  if (n < 90) return "ok";
-  return "high";
 }
 
 function stateCopy(state: StatusSnapshot["state"]): string {
@@ -61,11 +45,6 @@ export default function App() {
   const [renameVal, setRenameVal] = useState("");
   const [dropOver, setDropOver] = useState(false);
   const [opts, setOpts] = useState<SessionOpts>(DEFAULT_OPTS);
-  const [apps, setApps] = useState<DetectedApp[]>([]);
-  const [tunneled, setTunneled] = useState<string[]>([]);
-  const [appQuery, setAppQuery] = useState("");
-  const [appSource, setAppSource] = useState<string>("all");
-  const [scanning, setScanning] = useState(false);
   const [cidrDraft, setCidrDraft] = useState("");
 
   const refresh = useCallback(async () => {
@@ -79,8 +58,6 @@ export default function App() {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
     invoke("helper_ok").catch((e) => setNote(String(e)));
     invoke<SessionOpts>("get_opts").then(setOpts).catch(() => {});
-    invoke<DetectedApp[]>("list_apps").then(setApps).catch(() => {});
-    invoke<string[]>("tunneled_ids").then(setTunneled).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -101,7 +78,6 @@ export default function App() {
     () => (status.rtt_history?.length ? status.rtt_history : history),
     [status.rtt_history, history]
   );
-  const tone = pingTone(status.rtt_ms);
 
   async function importPaths(paths: string[]) {
     if (!paths.length) return;
@@ -221,7 +197,7 @@ export default function App() {
   }
 
   function splitLine(): string {
-    const appsN = tunneled.length;
+    const appsN = opts.bypass_apps?.length ?? 0;
     const sites = opts.site_mode;
     const site =
       sites === "only_listed"
@@ -285,50 +261,26 @@ export default function App() {
     }
   }
 
-  async function saveTunneled(ids: string[]) {
-    const next = await invoke<string[]>("set_tunneled", { ids });
-    setTunneled(next);
-  }
-
-  async function toggleApp(id: string) {
-    const next = tunneled.includes(id)
-      ? tunneled.filter((x) => x !== id)
-      : [...tunneled, id];
-    await saveTunneled(next);
-  }
-
-  async function rescan() {
-    setScanning(true);
-    try {
-      const list = await invoke<DetectedApp[]>("refresh_apps");
-      setApps(list);
-    } catch (e) {
-      setNote(String(e));
-    } finally {
-      setScanning(false);
-    }
-  }
-
-  async function addManual() {
+  async function addBypass() {
     const picked = await open({
       multiple: false,
       filters: [{ name: "App", extensions: ["exe"] }],
     });
     if (!picked || Array.isArray(picked)) return;
     try {
-      const a = await invoke<DetectedApp>("add_manual_app", { path: picked });
-      setApps((cur) => (cur.some((x) => x.id === a.id) ? cur : [...cur, a]));
+      const next = await invoke<SessionOpts>("add_bypass_app", { path: picked });
+      setOpts(next);
     } catch (e) {
       setNote(String(e));
     }
   }
 
-  const shownApps = apps.filter((a) => {
-    if (appSource !== "all" && a.source !== appSource) return false;
-    if (!appQuery.trim()) return true;
-    const q = appQuery.toLowerCase();
-    return a.name.toLowerCase().includes(q) || a.executable.toLowerCase().includes(q);
-  });
+  async function removeBypass(path: string) {
+    await saveOpts({
+      ...opts,
+      bypass_apps: (opts.bypass_apps ?? []).filter((a) => a.path !== path),
+    });
+  }
 
   const addPanel = (
     <AddConfig
@@ -364,7 +316,7 @@ export default function App() {
 
           {status.state === "connected" && (
             <section className="live">
-              <div className={`hud-ping is-${tone}`}>
+              <div className="hud-ping">
                 <span className="n">{fmtRtt(status.rtt_ms)}</span>
                 <span className="u">ms</span>
               </div>
@@ -468,50 +420,25 @@ export default function App() {
             </>
           )}
           <h2 className="sub">Apps without VPN</h2>
-          <div className="app-tools">
-            <input
-              className="search"
-              placeholder="Search"
-              value={appQuery}
-              onChange={(e) => setAppQuery(e.target.value)}
-            />
-            <button type="button" className="ghost" onClick={addManual}>
-              Add .exe
-            </button>
-            <button type="button" className="ghost" disabled={scanning} onClick={rescan}>
-              {scanning ? "…" : "Refresh"}
-            </button>
-          </div>
-          <p className="hint">ON = this app bypasses the tunnel. Everything else uses VPN.</p>
+          <button type="button" className="ghost" onClick={addBypass}>
+            Add .exe
+          </button>
+          <p className="hint">Selected apps work without VPN. Everything else uses the tunnel.</p>
           <ul className="apps">
-            {shownApps.length === 0 && (
-              <li className="empty">Refresh or add an .exe</li>
+            {(opts.bypass_apps ?? []).length === 0 && (
+              <li className="empty">Add an .exe that should bypass VPN</li>
             )}
-            {shownApps.map((a) => {
-              const on = tunneled.includes(a.id);
-              return (
-                <li key={a.id} className={`${on ? "boosted" : ""} ${a.missing ? "missing" : ""}`}>
-                  <span className="app-ico" aria-hidden>
-                    {a.name.slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="app-meta">
-                    <strong>
-                      {a.name}
-                      {a.missing ? " — missing" : ""}
-                    </strong>
-                    <em>{sourceLabel(a.source)}</em>
-                  </div>
-                  <button
-                    type="button"
-                    className={`boost-sw ${on ? "on" : "off"}`}
-                    disabled={a.missing}
-                    onClick={() => toggleApp(a.id)}
-                  >
-                    {on ? "BYPASS" : "VPN"}
-                  </button>
-                </li>
-              );
-            })}
+            {(opts.bypass_apps ?? []).map((a) => (
+              <li key={a.path} className="boosted">
+                <div className="app-meta">
+                  <strong>{a.name}</strong>
+                  <em>{a.path}</em>
+                </div>
+                <button type="button" className="ghost" onClick={() => removeBypass(a.path)}>
+                  Remove
+                </button>
+              </li>
+            ))}
           </ul>
         </main>
       )}
@@ -627,7 +554,7 @@ export default function App() {
             )}
             {sheet === "add" && (
               <>
-                <h2>Add a route</h2>
+                <h2>Add a config</h2>
                 {addPanel}
               </>
             )}
@@ -679,12 +606,12 @@ function AddConfig({
         }}
       >
         <strong>Drop a .conf here</strong>
-        <em>or click to browse — the file your VPN emailed you</em>
+        <em>or click to browse</em>
       </button>
       <p className="or">or paste it</p>
       <form onSubmit={onPaste} className="paste">
         <input
-          placeholder="Name this route (EU West, NA East…)"
+          placeholder="Name"
           value={pasteName}
           onChange={(e) => setPasteName(e.target.value)}
         />
@@ -696,7 +623,7 @@ function AddConfig({
           onChange={(e) => setPasteBody(e.target.value)}
         />
         <button type="submit" disabled={busy || !pasteBody.trim()}>
-          Save route
+          Save
         </button>
       </form>
     </div>

@@ -6,10 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use agg_core::ipc::{rpc, IpcRequest};
-use agg_core::{
-    run_udp_session, scan, windows_roots, ConnectionState, DetectedApp, SessionOpts, StatusSnapshot,
-    WgConfig,
-};
+use agg_core::{run_udp_session, BypassApp, ConnectionState, SessionOpts, StatusSnapshot, WgConfig};
 use profiles::{Library, Profile};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -24,8 +21,6 @@ struct AppState {
     history: Mutex<VecDeque<u32>>,
     lib: Mutex<Option<Library>>,
     opts: Mutex<SessionOpts>,
-    apps: Mutex<Vec<DetectedApp>>,
-    tunneled: Mutex<Vec<String>>,
 }
 
 const HISTORY: usize = 60;
@@ -60,11 +55,6 @@ fn emit_status(app: &AppHandle, state: &AppState, mut snap: StatusSnapshot) {
 }
 
 #[tauri::command]
-fn filter_status() -> agg_platform_windows::FilterStatus {
-    agg_platform_windows::detect_filter()
-}
-
-#[tauri::command]
 fn kill_switch_off() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -82,7 +72,7 @@ fn helper_ok() -> Result<(), String> {
         if r.ok {
             Ok(())
         } else {
-            Err(r.error.unwrap_or_else(|| "tunnel helper not ready".into()))
+            Err(r.error.unwrap_or_else(|| "tunnel helper is not running".into()))
         }
     }
     #[cfg(not(windows))]
@@ -154,102 +144,6 @@ fn select_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<
     open_lib(&app, &state)?.set_active(Some(id))
 }
 
-fn apps_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    app.path().app_data_dir().map_err(|e| e.to_string())
-}
-
-fn load_json<T: serde::de::DeserializeOwned>(path: &std::path::Path, fallback: T) -> T {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<T>(&s).ok())
-        .unwrap_or(fallback)
-}
-
-fn save_json<T: serde::Serialize>(path: &std::path::Path, v: &T) {
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    if let Ok(s) = serde_json::to_string_pretty(v) {
-        let _ = std::fs::write(path, s);
-    }
-}
-
-#[tauri::command]
-fn list_apps(state: State<AppState>) -> Vec<DetectedApp> {
-    state.apps.lock().map(|g| g.clone()).unwrap_or_default()
-}
-
-#[tauri::command]
-fn tunneled_ids(state: State<AppState>) -> Vec<String> {
-    state.tunneled.lock().map(|g| g.clone()).unwrap_or_default()
-}
-
-#[tauri::command]
-fn set_tunneled(app: AppHandle, state: State<AppState>, ids: Vec<String>) -> Result<Vec<String>, String> {
-    if let Ok(mut g) = state.tunneled.lock() {
-        *g = ids.clone();
-    }
-    if let Ok(dir) = apps_dir(&app) {
-        save_json(&dir.join("tunneled_apps.json"), &ids);
-    }
-    Ok(ids)
-}
-
-#[tauri::command]
-fn add_manual_app(
-    app: AppHandle,
-    state: State<AppState>,
-    path: String,
-) -> Result<DetectedApp, String> {
-    let p = std::path::PathBuf::from(&path);
-    if !p.exists() {
-        return Err("file not found".into());
-    }
-    let name = p
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("app")
-        .to_string();
-    let entry = DetectedApp {
-        id: format!("manual:{}", p.display()),
-        name,
-        source: agg_core::AppSource::Manual,
-        executable: p.clone(),
-        install_dir: p.parent().unwrap_or(p.as_path()).to_path_buf(),
-        icon_path: None,
-        missing: false,
-    };
-    if let Ok(mut g) = state.apps.lock() {
-        if !g.iter().any(|a| a.id == entry.id) {
-            g.push(entry.clone());
-            if let Ok(dir) = apps_dir(&app) {
-                save_json(&dir.join("detected_apps.json"), &*g);
-            }
-        }
-    }
-    Ok(entry)
-}
-
-#[tauri::command]
-fn refresh_apps(app: AppHandle, state: State<AppState>) -> Result<Vec<DetectedApp>, String> {
-    let mut found = scan(&windows_roots());
-    agg_core::discovery::mark_missing(&mut found);
-    if let Ok(dir) = apps_dir(&app) {
-        let cached: Vec<DetectedApp> = load_json(&dir.join("detected_apps.json"), Vec::new());
-        for c in cached {
-            if c.source == agg_core::AppSource::Manual && !found.iter().any(|a| a.id == c.id) {
-                found.push(c);
-            }
-        }
-        agg_core::discovery::mark_missing(&mut found);
-        save_json(&dir.join("detected_apps.json"), &found);
-    }
-    if let Ok(mut g) = state.apps.lock() {
-        *g = found.clone();
-    }
-    Ok(found)
-}
-
 #[tauri::command]
 fn get_opts(state: State<AppState>) -> SessionOpts {
     state
@@ -268,6 +162,33 @@ fn set_opts(app: AppHandle, state: State<AppState>, opts: SessionOpts) -> Result
     }
     save_opts(&app, &opts);
     Ok(opts)
+}
+
+#[tauri::command]
+fn add_bypass_app(app: AppHandle, state: State<AppState>, path: String) -> Result<SessionOpts, String> {
+    let p = std::path::PathBuf::from(&path);
+    if !p.exists() {
+        return Err("file not found".into());
+    }
+    let name = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("app")
+        .to_string();
+    let mut opts = get_opts_inner(&state);
+    if !opts.bypass_apps.iter().any(|a| a.path == path) {
+        opts.bypass_apps.push(BypassApp { name, path });
+    }
+    set_opts(app, state, opts)
+}
+
+fn get_opts_inner(state: &AppState) -> SessionOpts {
+    state
+        .opts
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+        .sanitized()
 }
 
 fn opts_path(app: &AppHandle) -> Option<std::path::PathBuf> {
@@ -321,25 +242,7 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         .and_then(|p| p.endpoint)
         .map(|e| e.to_string());
 
-    let tunneled = state
-        .tunneled
-        .lock()
-        .map(|g| g.clone())
-        .unwrap_or_default();
-    let apps = state.apps.lock().map(|g| g.clone()).unwrap_or_default();
-    let mut opts = state
-        .opts
-        .lock()
-        .map(|g| g.clone())
-        .unwrap_or_default()
-        .sanitized();
-    opts.bypass_apps = tunneled.clone();
-    // Amnezia Windows: selected apps work *without* VPN.
-    opts.direct_exes = apps
-        .iter()
-        .filter(|a| tunneled.contains(&a.id) && !a.missing)
-        .map(|a| a.executable.display().to_string())
-        .collect();
+    let opts = get_opts_inner(&state);
     let mut connecting = StatusSnapshot::connecting(endpoint.clone());
     connecting.server = name.clone();
     connecting.profile_id = Some(profile_id.clone());
@@ -487,42 +390,20 @@ pub fn run() {
             history: Mutex::new(VecDeque::new()),
             lib: Mutex::new(None),
             opts: Mutex::new(SessionOpts::default()),
-            apps: Mutex::new(Vec::new()),
-            tunneled: Mutex::new(Vec::new()),
         })
         .setup(|app| {
             if let Some(win) = app.get_webview_window("main") {
                 fit_to_monitor(&win);
             }
-            let handle = app.handle().clone();
-            let opts = load_opts(&handle);
+            let opts = load_opts(&app.handle());
             if let Ok(mut g) = app.state::<AppState>().opts.lock() {
                 *g = opts;
-            }
-            if let Ok(dir) = apps_dir(&handle) {
-                let mut found: Vec<DetectedApp> =
-                    load_json(&dir.join("detected_apps.json"), Vec::new());
-                if found.is_empty() {
-                    found = scan(&windows_roots());
-                    agg_core::discovery::mark_missing(&mut found);
-                    save_json(&dir.join("detected_apps.json"), &found);
-                } else {
-                    agg_core::discovery::mark_missing(&mut found);
-                }
-                if let Ok(mut g) = app.state::<AppState>().apps.lock() {
-                    *g = found;
-                }
-                let tun: Vec<String> = load_json(&dir.join("tunneled_apps.json"), Vec::new());
-                if let Ok(mut g) = app.state::<AppState>().tunneled.lock() {
-                    *g = tun;
-                }
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_status,
             helper_ok,
-            filter_status,
             kill_switch_off,
             list_profiles,
             active_profile,
@@ -533,11 +414,7 @@ pub fn run() {
             select_profile,
             get_opts,
             set_opts,
-            list_apps,
-            tunneled_ids,
-            set_tunneled,
-            add_manual_app,
-            refresh_apps,
+            add_bypass_app,
             connect,
             disconnect
         ])

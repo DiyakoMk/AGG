@@ -21,17 +21,19 @@ pub struct SessionOpts {
     pub kill_switch: bool,
     #[serde(default = "default_true")]
     pub auto_reconnect: bool,
-    #[serde(default = "default_true")]
-    pub mtu_sweep: bool,
     #[serde(default)]
     pub site_mode: SiteMode,
     #[serde(default)]
     pub split_sites: Vec<String>,
-    /// Apps that bypass the VPN (Amnezia Windows app-split).
+    /// Apps that work without VPN (Amnezia Windows exceptions).
     #[serde(default)]
-    pub bypass_apps: Vec<String>,
-    #[serde(default)]
-    pub direct_exes: Vec<String>,
+    pub bypass_apps: Vec<BypassApp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BypassApp {
+    pub name: String,
+    pub path: String,
 }
 
 fn default_true() -> bool {
@@ -43,11 +45,9 @@ impl Default for SessionOpts {
         Self {
             kill_switch: false,
             auto_reconnect: true,
-            mtu_sweep: true,
             site_mode: SiteMode::All,
             split_sites: Vec::new(),
             bypass_apps: Vec::new(),
-            direct_exes: Vec::new(),
         }
     }
 }
@@ -55,17 +55,19 @@ impl Default for SessionOpts {
 impl SessionOpts {
     pub fn sanitized(&self) -> Self {
         let mut out = self.clone();
-        out.direct_exes.retain(|p| !p.trim().is_empty());
-        out.direct_exes.sort();
-        out.direct_exes.dedup();
+        out.bypass_apps.retain(|a| !a.path.trim().is_empty());
         out.split_sites.retain(|s| s.parse::<IpNet>().is_ok());
         out
     }
 
+    pub fn direct_exes(&self) -> Vec<String> {
+        self.bypass_apps.iter().map(|a| a.path.clone()).collect()
+    }
+
     pub fn label(&self) -> String {
         match self.site_mode {
-            SiteMode::All if self.direct_exes.is_empty() => "All traffic".into(),
-            SiteMode::All => format!("All traffic · {} apps bypass", self.direct_exes.len()),
+            SiteMode::All if self.bypass_apps.is_empty() => "All traffic".into(),
+            SiteMode::All => format!("All traffic · {} apps bypass", self.bypass_apps.len()),
             SiteMode::OnlyListed => "Listed IPs through VPN".into(),
             SiteMode::ExceptListed => "Listed IPs bypass VPN".into(),
         }

@@ -1,4 +1,4 @@
-//! Windows platform: Wintun tunnel. Optional ndisapi detect (driver not bundled).
+//! Windows: Wintun AmneziaWG tunnel. KillSwitch and app-bypass via firewall.
 
 use thiserror::Error;
 
@@ -18,16 +18,12 @@ impl PlatformError {
     }
 }
 
-pub mod filter;
-
 #[cfg(windows)]
 pub mod wfp;
 #[cfg(windows)]
 mod wintun_tun;
 #[cfg(windows)]
 pub use wintun_tun::{wintun_down, wintun_up, wintun_up_with_stats};
-
-pub use filter::{detect as detect_filter, FilterStatus, DRIVER_DOWNLOAD, DRIVER_NAME};
 
 #[cfg(not(windows))]
 pub fn wintun_up(

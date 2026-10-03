@@ -51,8 +51,6 @@ pub fn wintun_up_with_stats(
             _ => None,
         })
         .ok_or_else(|| PlatformError::msg("[Interface] Address must include IPv4"))?;
-    let mtu_cap = cfg.interface.mtu.unwrap_or(1420);
-
     loop {
         if !running.load(Ordering::SeqCst) {
             return Ok(());
@@ -71,11 +69,7 @@ pub fn wintun_up_with_stats(
                 "handshake failed; AGG adapter was not created",
             ));
         }
-        let mtu = if opts.mtu_sweep {
-            sweep_mtu(&udp, mtu_cap)
-        } else {
-            mtu_cap.min(1280).max(576)
-        };
+        let mtu = cfg.interface.mtu.unwrap_or(1420).clamp(576, 1500);
         eprintln!("handshake ok — creating Wintun adapter {ADAPTER_NAME} mtu={mtu}");
 
         let mut tun = WintunTun::open(tun_ip, plen, mtu, &cfg.interface.dns)?;
@@ -86,9 +80,10 @@ pub fn wintun_up_with_stats(
         let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets, &lan)?;
         eprintln!("routes on ({}) ; forwarding", opts.label());
 
-        let _split = match crate::wfp::SplitRules::engage(tun_ip, &opts.direct_exes) {
+        let bypass = opts.direct_exes();
+        let _split = match crate::wfp::SplitRules::engage(tun_ip, &bypass) {
             Ok(s) => {
-                eprintln!("DIRECT apps blocked from tunnel: {}", opts.direct_exes.len());
+                eprintln!("apps without VPN: {}", bypass.len());
                 Some(s)
             }
             Err(e) => {
@@ -196,21 +191,6 @@ pub fn wintun_up_with_stats(
         eprintln!("network dropped; reconnecting");
         std::thread::sleep(Duration::from_secs(2));
     }
-}
-
-fn sweep_mtu(udp: &UdpSocket, cap: u16) -> u16 {
-    let cap = cap.clamp(576, 1500);
-    for try_mtu in [cap, 1420, 1380, 1280, 1200] {
-        if try_mtu > cap {
-            continue;
-        }
-        let payload = vec![0u8; (try_mtu as usize).saturating_sub(28).min(1400)];
-        if udp.send(&payload).is_ok() {
-            eprintln!("mtu sweep picked {try_mtu}");
-            return try_mtu;
-        }
-    }
-    1280
 }
 
 pub fn wintun_down() -> Result<(), PlatformError> {
