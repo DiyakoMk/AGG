@@ -35,7 +35,7 @@ Daily connect goes UI → named pipe → `AGGService` (SYSTEM).
 ## Rules
 
 - Windows tunnel NIC is Wintun `AGG`. Must be deleted on exit.
-- No process injection, no NDIS, no WinpkFilter. Apps library is selection only until a driver-free redirect exists.
+- No process injection. `ndisapi` detects Windows Packet Filter; the driver is **not** bundled ([releases](https://github.com/wiresock/ndisapi/releases)).
 - Kill switch: named Windows Firewall rules, deleted on Drop / `down`.
 - Auto-reconnect after handshake or UDP failure. Optional MTU sweep.
 - Every routing / filter-mode change has a rollback

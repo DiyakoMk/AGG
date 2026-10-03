@@ -76,6 +76,12 @@ export const IDLE: StatusSnapshot = {
   opts: DEFAULT_OPTS,
 };
 
+export type FilterStatus = {
+  present: boolean;
+  download: string;
+  hint: string;
+};
+
 export function sourceLabel(s: AppSource): string {
   switch (s) {
     case "steam":

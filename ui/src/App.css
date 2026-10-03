@@ -597,35 +597,125 @@ textarea:focus-visible {
 .apps {
   list-style: none;
   padding: 0;
-  margin: 0.4rem 0 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .apps li {
-  padding: 0.7rem 0;
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.75rem;
+  background: var(--surface);
+  border-radius: 0.85rem;
+  border: 1px solid transparent;
 }
 
-.apps label {
+.apps li.boosted {
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+.app-ico {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.65rem;
+  background: #1c1c24;
+  color: var(--cyan);
   display: flex;
-  gap: 0.65rem;
-  align-items: flex-start;
-  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.app-meta {
+  flex: 1;
+  min-width: 0;
 }
 
 .apps strong {
   display: block;
+  font-size: 0.92rem;
 }
 
 .apps em {
   display: block;
   font-style: normal;
   color: var(--mute);
-  font-size: 0.68rem;
-  word-break: break-all;
+  font-size: 0.7rem;
+  margin-top: 0.1rem;
 }
 
 .apps li.missing strong {
   color: var(--warn);
+}
+
+.boost-sw {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.boost-sw.off {
+  background: #2a2a32;
+  color: #c8c8d0;
+}
+
+.boost-sw.on {
+  background: var(--cyan);
+  color: #041016;
+}
+
+.boost-sw:disabled {
+  opacity: 0.4;
+}
+
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.15rem;
+  min-width: 6.4rem;
+  padding: 0.18rem;
+  border: 0;
+  border-radius: 999px;
+  background: #1c1c22;
+  cursor: pointer;
+}
+
+.seg span {
+  padding: 0.32rem 0.2rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mute);
+}
+
+.seg span.lit {
+  background: var(--cyan);
+  color: #041016;
+}
+
+.seg.off span.lit {
+  background: #3a3a44;
+  color: #f4f4f6;
+}
+
+.ghost-btn {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.78rem;
 }
 
 .paste {

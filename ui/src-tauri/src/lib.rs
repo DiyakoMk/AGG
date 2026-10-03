@@ -60,6 +60,11 @@ fn emit_status(app: &AppHandle, state: &AppState, mut snap: StatusSnapshot) {
 }
 
 #[tauri::command]
+fn filter_status() -> agg_platform_windows::FilterStatus {
+    agg_platform_windows::detect_filter()
+}
+
+#[tauri::command]
 fn helper_ok() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -494,6 +499,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_status,
             helper_ok,
+            filter_status,
             list_profiles,
             active_profile,
             import_files,

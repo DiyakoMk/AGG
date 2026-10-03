@@ -2,11 +2,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
 import {
   DEFAULT_OPTS,
   DetectedApp,
+  FilterStatus,
   IDLE,
   Profile,
   SessionOpts,
@@ -65,6 +67,7 @@ export default function App() {
   const [appQuery, setAppQuery] = useState("");
   const [appSource, setAppSource] = useState<string>("all");
   const [scanning, setScanning] = useState(false);
+  const [filter, setFilter] = useState<FilterStatus | null>(null);
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -79,6 +82,7 @@ export default function App() {
     invoke<SessionOpts>("get_opts").then(setOpts).catch(() => {});
     invoke<DetectedApp[]>("list_apps").then(setApps).catch(() => {});
     invoke<string[]>("tunneled_ids").then(setTunneled).catch(() => {});
+    invoke<FilterStatus>("filter_status").then(setFilter).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -350,8 +354,8 @@ export default function App() {
 
           <p className="split-line">
             {tunneled.length
-              ? `${tunneled.length} app${tunneled.length === 1 ? "" : "s"} marked — full tunnel until per-process redirect`
-              : "Full tunnel · pick apps in Apps"}
+              ? `${tunneled.length} boosted`
+              : "Pick games in Apps"}
           </p>
 
           {status.error && <p className="fault">{status.error}</p>}
@@ -437,34 +441,41 @@ export default function App() {
             </button>
           </div>
           <p className="hint">
-            Checked apps are the ones you want boosted. Per-process redirect is not in this build
-            (no NDIS). Boost is still a full tunnel.
+            {filter?.present
+              ? "Boosted apps go through AGG. Direct stays on your ISP."
+              : "Install Windows Packet Filter (personal use) so Boosted apps can go through AGG."}
           </p>
           <ul className="apps">
             {shownApps.length === 0 && (
-              <li className="empty">No apps yet — Refresh or add an .exe</li>
+              <li className="empty">No games yet — Refresh or add an .exe</li>
             )}
-            {shownApps.map((a) => (
-              <li key={a.id} className={a.missing ? "missing" : ""}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={tunneled.includes(a.id)}
-                    disabled={a.missing}
-                    onChange={() => toggleApp(a.id)}
-                  />
-                  <span>
+            {shownApps.map((a) => {
+              const on = tunneled.includes(a.id);
+              return (
+                <li key={a.id} className={`${on ? "boosted" : ""} ${a.missing ? "missing" : ""}`}>
+                  <span className="app-ico" aria-hidden>
+                    {a.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <div className="app-meta">
                     <strong>
                       {a.name}
-                      {a.missing ? " (missing)" : ""}
+                      {a.missing ? " — missing" : ""}
                     </strong>
                     <em>
-                      {sourceLabel(a.source)} · {a.executable}
+                      {sourceLabel(a.source)}
                     </em>
-                  </span>
-                </label>
-              </li>
-            ))}
+                  </div>
+                  <button
+                    type="button"
+                    className={`boost-sw ${on ? "on" : "off"}`}
+                    disabled={a.missing}
+                    onClick={() => toggleApp(a.id)}
+                  >
+                    {on ? "BOOSTED" : "DIRECT"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </main>
       )}
@@ -475,6 +486,23 @@ export default function App() {
             <h1>Settings</h1>
           </header>
           <ul className="rows">
+            <li>
+              <div>
+                <strong>Packet filter</strong>
+                <em>{filter?.present ? "Installed" : filter?.hint ?? "Checking…"}</em>
+              </div>
+              {!filter?.present && (
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() =>
+                    openUrl(filter?.download ?? "https://github.com/wiresock/ndisapi/releases")
+                  }
+                >
+                  Install
+                </button>
+              )}
+            </li>
             <li>
               <div>
                 <strong>Kill switch</strong>
@@ -712,9 +740,9 @@ function ServerList({
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
-    <button type="button" className={`toggle ${on ? "on" : "off"}`} onClick={onClick}>
-      <span className="toggle-knob" />
-      <span className="toggle-txt">{on ? "ON" : "OFF"}</span>
+    <button type="button" className={`seg ${on ? "on" : "off"}`} onClick={onClick}>
+      <span className={on ? "lit" : ""}>ON</span>
+      <span className={!on ? "lit" : ""}>OFF</span>
     </button>
   );
 }
