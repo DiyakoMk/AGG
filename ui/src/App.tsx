@@ -441,9 +441,8 @@ export default function App() {
             </button>
           </div>
           <p className="hint">
-            {filter?.present
-              ? "Boosted apps go through AGG. Direct stays on your ISP."
-              : "Install Windows Packet Filter (personal use) so Boosted apps can go through AGG."}
+            BOOSTED stays on AGG. DIRECT is blocked from the tunnel address so it uses your ISP.
+            Empty selection = everything tunnels.
           </p>
           <ul className="apps">
             {shownApps.length === 0 && (
@@ -506,12 +505,29 @@ export default function App() {
             <li>
               <div>
                 <strong>Kill switch</strong>
-                <em>Block the internet if the tunnel drops</em>
+                <em>Block the internet if the tunnel drops. If you have no net after a crash: Settings → Clear, or agg-cli kill-switch off</em>
               </div>
               <Toggle
                 on={opts.kill_switch}
                 onClick={() => saveOpts({ ...opts, kill_switch: !opts.kill_switch })}
               />
+            </li>
+            <li>
+              <div>
+                <strong>Clear firewall leftover</strong>
+                <em>Removes kill-switch and DIRECT rules if AGG died</em>
+              </div>
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() =>
+                  invoke("kill_switch_off")
+                    .then(() => setNote("Firewall leftovers cleared"))
+                    .catch((e) => setNote(String(e)))
+                }
+              >
+                Clear
+              </button>
             </li>
             <li>
               <div>

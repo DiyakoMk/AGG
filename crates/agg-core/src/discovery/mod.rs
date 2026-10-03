@@ -57,60 +57,64 @@ pub struct ScanRoots {
 
 pub fn windows_roots() -> ScanRoots {
     let mut r = ScanRoots::default();
-    let pf86 = std::env::var_os("ProgramFiles(x86)")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files (x86)"));
-    let pf = std::env::var_os("ProgramFiles")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-    let pd = std::env::var_os("ProgramData")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
-    let local = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public\AppData\Local"));
+    let pf86 = env_dir("ProgramFiles(x86)");
+    let pf = env_dir("ProgramFiles");
+    let pd = env_dir("ProgramData");
+    let local = env_dir("LOCALAPPDATA");
 
-    let steam_vdf = pf86.join(r"Steam\steamapps\libraryfolders.vdf");
-    r.steam_libraries = steam_libraries_from_vdf(&steam_vdf);
-    if r.steam_libraries.is_empty() {
-        let fallback = pf86.join("Steam");
-        if fallback.exists() {
-            r.steam_libraries.push(fallback);
+    if let Some(root) = pf86.as_ref() {
+        let steam_vdf = root.join("Steam").join("steamapps").join("libraryfolders.vdf");
+        r.steam_libraries = steam_libraries_from_vdf(&steam_vdf);
+        if r.steam_libraries.is_empty() {
+            let fallback = root.join("Steam");
+            if fallback.exists() {
+                r.steam_libraries.push(fallback);
+            }
         }
     }
 
-    let epic = pd.join(r"Epic\UnrealEngineLauncher\LauncherInstalled.dat");
-    if epic.exists() {
-        r.epic_launcher_dat = Some(epic);
-    }
-
-    for p in [
-        PathBuf::from(r"C:\Riot Games"),
-        local.join("Riot Games"),
-        pf.join("Riot Games"),
-    ] {
-        if p.exists() {
-            r.riot_roots.push(p);
+    if let Some(pd) = pd.as_ref() {
+        let epic = pd
+            .join("Epic")
+            .join("UnrealEngineLauncher")
+            .join("LauncherInstalled.dat");
+        if epic.exists() {
+            r.epic_launcher_dat = Some(epic);
+        }
+        let bnet = pd.join("Battle.net").join("Agent");
+        if bnet.exists() {
+            r.battlenet_agent = Some(bnet);
+        }
+        let gog = pd
+            .join("GOG.com")
+            .join("Galaxy")
+            .join("config")
+            .join("config.json");
+        if gog.exists() {
+            r.gog_config = Some(gog);
         }
     }
 
-    for name in ["Discord", "DiscordPTB", "DiscordCanary"] {
-        let p = local.join(name);
-        if p.exists() {
-            r.discord_roots.push(p);
+    for base in [local.as_ref(), pf.as_ref(), pf86.as_ref()].into_iter().flatten() {
+        let riot = base.join("Riot Games");
+        if riot.exists() {
+            r.riot_roots.push(riot);
         }
     }
 
-    let bnet = pd.join(r"Battle.net\Agent");
-    if bnet.exists() {
-        r.battlenet_agent = Some(bnet);
-    }
-
-    let gog = pd.join(r"GOG.com\Galaxy\config\config.json");
-    if gog.exists() {
-        r.gog_config = Some(gog);
+    if let Some(local) = local.as_ref() {
+        for name in ["Discord", "DiscordPTB", "DiscordCanary"] {
+            let p = local.join(name);
+            if p.exists() {
+                r.discord_roots.push(p);
+            }
+        }
     }
     r
+}
+
+fn env_dir(key: &str) -> Option<PathBuf> {
+    std::env::var_os(key).map(PathBuf::from)
 }
 
 pub fn scan(roots: &ScanRoots) -> Vec<DetectedApp> {

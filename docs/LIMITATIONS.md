@@ -1,21 +1,31 @@
 # Limitations
 
-## Per-process boost
+## Split (BOOSTED / DIRECT)
 
-Apps you mark **BOOSTED** are the ones that should go through AGG. That redirect uses Windows Packet Filter (NDISRD) via the `ndisapi` crate (MIT/Apache).
+Default route is the Wintun adapter. **BOOSTED** apps use that route. **DIRECT** apps are blocked from the tunnel IPv4 (`AGG-direct-*` firewall rules) so Windows uses the LAN default instead.
 
-**The driver is not in the AGG installer.** Personal / non-commercial use of WinpkFilter is allowed; redistribution is not. Install the runtime yourself:
+If nothing is BOOSTED, the tunnel is full (no DIRECT rules).
 
-https://github.com/wiresock/ndisapi/releases
+No process injection. No homemade NDIS inject (bugcheck). WinpkFilter is **not** bundled.
 
-Settings shows **Install** when NDISRD is missing. Homemade packet inject (forged `IntermediateBuffer`) is not used — it bugchecks Windows.
+## Kill switch
 
-Until the driver is present, Boost is a full tunnel (config AllowedIPs).
+Named firewall rules: allow VPS + tunnel IP, block other outbound. Deleted on Stop / `down` / Drop.
 
-## Vanguard / anti-cheat
+If AGG dies with kill switch on, you may have no internet until:
 
-No process injection, hooks, or memory reads. Wintun `AGG` is a normal L3 NIC. Vanguard may still flag a virtual adapter or a third-party NDIS filter (VAN 84). Documented, not evaded.
+- Settings → **Clear**, or
+- `agg-cli kill-switch off` (elevated), or
+- reboot
+
+## Packet filter
+
+`ndisapi` detects NDISRD only. Install yourself if you want it: https://github.com/wiresock/ndisapi/releases
+
+## Vanguard
+
+No injection. Virtual NIC + firewall rules may still be flagged (VAN 84). Documented, not evaded.
 
 ## Scanner
 
-Read-only. Missing folders are skipped. Steam tools/soundtracks skipped. Battle.net paths are scraped and can miss titles — add those with **Add**.
+Paths come from environment variables and launcher files, not a hardcoded `C:\`. Missing folders skipped. Add leftover games with **Add**.

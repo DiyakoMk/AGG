@@ -9,6 +9,8 @@ export type SessionOpts = {
   kill_switch: boolean;
   auto_reconnect: boolean;
   mtu_sweep: boolean;
+  boosted_apps?: string[];
+  direct_exes?: string[];
 };
 
 export const DEFAULT_OPTS: SessionOpts = {

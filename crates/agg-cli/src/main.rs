@@ -50,6 +50,9 @@ enum Cmd {
     },
     /// Tear down AGG adapter / Linux TUN routes.
     Down,
+    /// Remove leftover kill-switch / DIRECT firewall rules (Windows, elevated).
+    #[command(name = "kill-switch")]
+    KillSwitch { action: String },
 }
 
 fn main() -> Result<()> {
@@ -66,6 +69,7 @@ fn main() -> Result<()> {
         Cmd::Handshake { config, timeout } => cmd_handshake(&config, Duration::from_secs(timeout)),
         Cmd::Up { config } => cmd_up(&config),
         Cmd::Down => cmd_down(),
+        Cmd::KillSwitch { action } => cmd_kill_switch(&action),
     }
 }
 
@@ -395,6 +399,22 @@ fn cmd_up_unix(path: &Path) -> Result<()> {
     let _ = std::fs::remove_file(STATE_FILE);
     say("down");
     Ok(())
+}
+
+fn cmd_kill_switch(action: &str) -> Result<()> {
+    if action != "off" {
+        bail!("use: agg-cli kill-switch off");
+    }
+    #[cfg(windows)]
+    {
+        agg_platform_windows::wfp::KillSwitch::disarm_leftovers();
+        say("kill switch and DIRECT rules removed");
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    {
+        bail!("Windows-only");
+    }
 }
 
 fn cmd_down() -> Result<()> {

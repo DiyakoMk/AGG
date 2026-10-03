@@ -85,6 +85,16 @@ pub fn wintun_up_with_stats(
         let mut routes = WinRoutes::apply(endpoint.ip(), tun.if_index, tun_ip, &nets)?;
         eprintln!("routes on ({}) ; forwarding", opts.label());
 
+        let _split = match crate::wfp::SplitRules::engage(tun_ip, &opts.direct_exes) {
+            Ok(s) => {
+                eprintln!("DIRECT apps blocked from tunnel: {}", opts.direct_exes.len());
+                Some(s)
+            }
+            Err(e) => {
+                tracing::warn!("split rules: {e}");
+                None
+            }
+        };
         let _kill = if opts.kill_switch {
             match crate::wfp::KillSwitch::engage(endpoint, tun_ip) {
                 Ok(k) => {
@@ -176,6 +186,7 @@ pub fn wintun_up_with_stats(
 
         eprintln!("tearing down adapter and routes");
         drop(_kill);
+        drop(_split);
         routes.restore();
         tun.delete();
         if !running.load(Ordering::SeqCst) || !opts.auto_reconnect {

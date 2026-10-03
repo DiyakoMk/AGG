@@ -44,6 +44,7 @@ pub enum IpcRequest {
     Disconnect,
     Status,
     Ping,
+    KillSwitchOff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

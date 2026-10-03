@@ -65,6 +65,16 @@ fn filter_status() -> agg_platform_windows::FilterStatus {
 }
 
 #[tauri::command]
+fn kill_switch_off() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let _ = rpc(&IpcRequest::KillSwitchOff);
+        agg_platform_windows::wfp::KillSwitch::disarm_leftovers();
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn helper_ok() -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -311,12 +321,27 @@ fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result
         .and_then(|p| p.endpoint)
         .map(|e| e.to_string());
 
-    let opts = state
+    let tunneled = state
+        .tunneled
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    let apps = state.apps.lock().map(|g| g.clone()).unwrap_or_default();
+    let mut opts = state
         .opts
         .lock()
         .map(|g| g.clone())
         .unwrap_or_default()
         .sanitized();
+    opts.boosted_apps = tunneled.clone();
+    opts.direct_exes = if tunneled.is_empty() {
+        Vec::new()
+    } else {
+        apps.iter()
+            .filter(|a| !tunneled.contains(&a.id) && !a.missing)
+            .map(|a| a.executable.display().to_string())
+            .collect()
+    };
     let mut connecting = StatusSnapshot::connecting(endpoint.clone());
     connecting.server = name.clone();
     connecting.profile_id = Some(profile_id.clone());
@@ -500,6 +525,7 @@ pub fn run() {
             get_status,
             helper_ok,
             filter_status,
+            kill_switch_off,
             list_profiles,
             active_profile,
             import_files,

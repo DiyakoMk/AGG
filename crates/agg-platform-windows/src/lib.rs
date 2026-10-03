@@ -21,7 +21,7 @@ impl PlatformError {
 pub mod filter;
 
 #[cfg(windows)]
-mod wfp;
+pub mod wfp;
 #[cfg(windows)]
 mod wintun_tun;
 #[cfg(windows)]
@@ -50,4 +50,12 @@ pub fn wintun_up_with_stats(
 #[cfg(not(windows))]
 pub fn wintun_down() -> Result<(), PlatformError> {
     Err(PlatformError::NotWindows)
+}
+
+#[cfg(not(windows))]
+pub mod wfp {
+    pub struct KillSwitch;
+    impl KillSwitch {
+        pub fn disarm_leftovers() {}
+    }
 }

@@ -241,6 +241,14 @@ mod windows_impl {
                 }
             }
             IpcRequest::Connect { path, opts } => connect(&path, opts, last, tun),
+            IpcRequest::KillSwitchOff => {
+                agg_platform_windows::wfp::KillSwitch::disarm_leftovers();
+                IpcResponse {
+                    ok: true,
+                    error: None,
+                    status: last.lock().ok().map(|g| g.clone()),
+                }
+            }
         }
     }
 
