@@ -66,12 +66,11 @@ mod windows_impl {
     use agg_core::ipc::{IpcRequest, IpcResponse, PIPE_NAME, SERVICE_NAME};
     use agg_core::{StatusSnapshot, WgConfig};
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL};
+    use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_CONNECTED, HANDLE};
     use windows::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
     use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-    use windows::Win32::System::Memory::LocalFree;
     use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
@@ -363,9 +362,15 @@ mod windows_impl {
             0,
             Some(&sa),
         );
-        let _ = LocalFree(HLOCAL(sd.0));
+        // ConvertStringSecurityDescriptorToSecurityDescriptorW LocalAlloc's the SD.
+        // windows 0.62 does not export LocalFree; kernel32 does.
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
+        }
+        let _ = LocalFree(sd.0);
         if handle.is_invalid() {
-            return Err(windows::core::Error::from_win32());
+            return Err(windows::core::Error::from_thread());
         }
         Ok(handle)
     }
