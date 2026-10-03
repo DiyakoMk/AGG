@@ -1,10 +1,13 @@
-use std::path::PathBuf;
+mod profiles;
+
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 use agg_core::{run_udp_session, ConnectionState, StatusSnapshot, WgConfig};
-use tauri::{AppHandle, Emitter, State};
+use profiles::{Library, Profile};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct Session {
     running: Arc<AtomicBool>,
@@ -14,31 +17,39 @@ struct Session {
 struct AppState {
     session: Mutex<Option<Session>>,
     last: Mutex<StatusSnapshot>,
+    history: Mutex<VecDeque<u32>>,
+    lib: Mutex<Option<Library>>,
 }
 
-fn emit_status(app: &AppHandle, state: &AppState, snap: StatusSnapshot) {
+const HISTORY: usize = 60;
+
+fn open_lib(app: &AppHandle, state: &AppState) -> Result<Library, String> {
+    let mut g = state.lib.lock().map_err(|e| e.to_string())?;
+    if g.is_none() {
+        let dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("profiles");
+        *g = Some(Library::open(dir)?);
+    }
+    Ok(g.as_ref().expect("library").clone())
+}
+
+fn emit_status(app: &AppHandle, state: &AppState, mut snap: StatusSnapshot) {
+    if let Ok(mut hist) = state.history.lock() {
+        if let Some(rtt) = snap.rtt_ms {
+            hist.push_back(rtt);
+            while hist.len() > HISTORY {
+                hist.pop_front();
+            }
+        }
+        snap.rtt_history = hist.iter().copied().collect();
+    }
     if let Ok(mut g) = state.last.lock() {
         *g = snap.clone();
     }
     let _ = app.emit("status", &snap);
-}
-
-fn resolve_config(config_path: &str) -> Result<PathBuf, String> {
-    let p = PathBuf::from(config_path);
-    if p.exists() {
-        return Ok(p);
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let candidate = dir.join(config_path);
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-        }
-    }
-    Err(format!(
-        "config not found: {config_path} (tried cwd and exe directory)"
-    ))
 }
 
 #[tauri::command]
@@ -51,7 +62,56 @@ fn get_status(state: State<AppState>) -> StatusSnapshot {
 }
 
 #[tauri::command]
-fn connect(app: AppHandle, state: State<AppState>, config_path: String) -> Result<(), String> {
+fn list_profiles(app: AppHandle, state: State<AppState>) -> Result<Vec<Profile>, String> {
+    open_lib(&app, &state)?.list()
+}
+
+#[tauri::command]
+fn active_profile(app: AppHandle, state: State<AppState>) -> Result<Option<String>, String> {
+    open_lib(&app, &state)?.active_id()
+}
+
+#[tauri::command]
+fn import_files(
+    app: AppHandle,
+    state: State<AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<Profile>, String> {
+    let lib = open_lib(&app, &state)?;
+    let mut out = Vec::new();
+    for p in paths {
+        out.push(lib.import_file(std::path::Path::new(&p))?);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn import_text(
+    app: AppHandle,
+    state: State<AppState>,
+    name: Option<String>,
+    body: String,
+) -> Result<Profile, String> {
+    open_lib(&app, &state)?.import_text(name, &body, "paste")
+}
+
+#[tauri::command]
+fn rename_profile(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    name: String,
+) -> Result<Profile, String> {
+    open_lib(&app, &state)?.rename(&id, &name)
+}
+
+#[tauri::command]
+fn delete_profile(app: AppHandle, state: State<AppState>, id: String) -> Result<(), String> {
+    open_lib(&app, &state)?.remove(&id)
+}
+
+#[tauri::command]
+fn connect(app: AppHandle, state: State<AppState>, profile_id: String) -> Result<(), String> {
     let mut slot = state.session.lock().map_err(|e| e.to_string())?;
     if let Some(s) = slot.as_ref() {
         if s.running.load(Ordering::SeqCst) {
@@ -59,15 +119,31 @@ fn connect(app: AppHandle, state: State<AppState>, config_path: String) -> Resul
         }
     }
 
-    let path = resolve_config(&config_path)?;
+    let lib = open_lib(&app, &state)?;
+    let path = lib.conf_path(&profile_id);
+    if !path.exists() {
+        return Err("profile config missing on disk".into());
+    }
+    lib.set_active(Some(profile_id.clone()))?;
     let cfg = WgConfig::from_path(&path).map_err(|e| e.to_string())?;
+    let name = lib
+        .list()?
+        .into_iter()
+        .find(|p| p.id == profile_id)
+        .map(|p| p.name);
     let endpoint = cfg
         .peer()
         .ok()
         .and_then(|p| p.endpoint)
         .map(|e| e.to_string());
 
-    emit_status(&app, &state, StatusSnapshot::connecting(endpoint.clone()));
+    let mut connecting = StatusSnapshot::connecting(endpoint.clone());
+    connecting.server = name.clone();
+    connecting.profile_id = Some(profile_id.clone());
+    emit_status(&app, &state, connecting);
+    if let Ok(mut h) = state.history.lock() {
+        h.clear();
+    }
 
     let running = Arc::new(AtomicBool::new(true));
     let run = running.clone();
@@ -76,8 +152,12 @@ fn connect(app: AppHandle, state: State<AppState>, config_path: String) -> Resul
         let on_stats = {
             let app2 = app2.clone();
             let endpoint = endpoint.clone();
+            let name = name.clone();
+            let pid = profile_id.clone();
             move |stats| {
-                let snap = StatusSnapshot::from_stats(endpoint.clone(), stats);
+                let mut snap = StatusSnapshot::from_stats(endpoint.clone(), stats);
+                snap.server = name.clone();
+                snap.profile_id = Some(pid.clone());
                 let _ = app2.emit("status", &snap);
             }
         };
@@ -143,11 +223,24 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             session: Mutex::new(None),
             last: Mutex::new(StatusSnapshot::idle()),
+            history: Mutex::new(VecDeque::new()),
+            lib: Mutex::new(None),
         })
-        .invoke_handler(tauri::generate_handler![get_status, connect, disconnect])
+        .invoke_handler(tauri::generate_handler![
+            get_status,
+            list_profiles,
+            active_profile,
+            import_files,
+            import_text,
+            rename_profile,
+            delete_profile,
+            connect,
+            disconnect
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

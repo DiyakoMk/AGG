@@ -25,6 +25,9 @@ pub struct StatusSnapshot {
     pub rx_bytes: u64,
     pub loss: f32,
     pub error: Option<String>,
+    pub profile_id: Option<String>,
+    #[serde(default)]
+    pub rtt_history: Vec<u32>,
 }
 
 impl StatusSnapshot {
@@ -39,6 +42,8 @@ impl StatusSnapshot {
             rx_bytes: 0,
             loss: 0.0,
             error: None,
+            profile_id: None,
+            rtt_history: Vec::new(),
         }
     }
 
@@ -66,6 +71,8 @@ impl StatusSnapshot {
             rx_bytes: stats.rx_bytes as u64,
             loss: stats.estimated_loss,
             error: None,
+            profile_id: None,
+            rtt_history: Vec::new(),
         }
     }
 

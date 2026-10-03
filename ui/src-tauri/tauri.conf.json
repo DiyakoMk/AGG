@@ -13,8 +13,10 @@
     "windows": [
       {
         "title": "AGG",
-        "width": 520,
-        "height": 640,
+        "width": 1080,
+        "height": 720,
+        "minWidth": 860,
+        "minHeight": 600,
         "resizable": true
       }
     ],

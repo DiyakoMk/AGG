@@ -33,7 +33,7 @@ agg-cli down
 
 ## Phase 2 UI
 
-Connect / Disconnect, 1 Hz `status` events (RTT). No JS polling.
+Dashboard: drop / browse / paste as many `.conf` files as you want, rename, connect. Live RTT sparkline (last 60 s). No JS polling.
 
 ```bash
 cd ui
