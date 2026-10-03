@@ -31,7 +31,7 @@ npm install
 npm run tauri dev
 ```
 
-Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Settings: up to 3 layouts (Steam, Riot, Discord, …), kill switch, auto-reconnect, MTU sweep.
+Phone-sized HUD, centered on the monitor. Tap **Boost**. Routes: drop or paste a `.conf`. Apps: detect Steam / Epic / Riot / Discord and pick what you want boosted (full tunnel until per-process redirect). Settings: kill switch, auto-reconnect on network change, MTU sweep.
 
 Uninstall helper: `agg-svc.exe uninstall` (elevated), or uninstall AGG from Apps — the NSIS pre-uninstall hook stops and deletes the service.
 

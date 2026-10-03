@@ -15,7 +15,7 @@ Linux TUN+UDP (agg-cli)      — handshake / CLI proof
 
 | Crate | Role |
 |---|---|
-| `agg-core` | Config, BoringTun, named-pipe IPC, destination-IP layouts |
+| `agg-core` | Config, BoringTun, named-pipe IPC, game/app scanner |
 | `agg-cli` | Headless harness |
 | `agg-platform-windows` | Wintun `AGG` + Windows Firewall kill switch. Stub off-Windows. |
 | `agg-svc` | Windows service. Owns Wintun; UI is unprivileged. |
@@ -26,7 +26,7 @@ Linux TUN+UDP (agg-cli)      — handshake / CLI proof
 1. UDP handshake to the VPS (no NIC yet).
 2. Create Wintun adapter `AGG`, set tunnel IPv4 + MTU + DNS.
 3. Pin `/32` to the VPS via the LAN gateway.
-4. Install layout prefixes on `AGG` (Steam, Riot, Discord, … — up to 3). `Everything` uses `0.0.0.0/1` + `128.0.0.0/1`.
+4. Install the config AllowedIPs on `AGG` (usually `0.0.0.0/1` + `128.0.0.0/1`). Apps you check in the UI are remembered; per-process redirect is not in this build.
 5. Inner IP from Wintun → BoringTun encapsulate → UDP. Reverse on recv.
 6. Stop / service stop deletes routes, firewall rules, and the adapter.
 
@@ -35,7 +35,7 @@ Daily connect goes UI → named pipe → `AGGService` (SYSTEM).
 ## Rules
 
 - Windows tunnel NIC is Wintun `AGG`. Must be deleted on exit.
-- Split is **route-based** (destination prefixes). No process injection, no NDIS, no WinpkFilter.
+- No process injection, no NDIS, no WinpkFilter. Apps library is selection only until a driver-free redirect exists.
 - Kill switch: named Windows Firewall rules, deleted on Drop / `down`.
 - Auto-reconnect after handshake or UDP failure. Optional MTU sweep.
 - Every routing / filter-mode change has a rollback

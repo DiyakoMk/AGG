@@ -4,10 +4,18 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ConnectRing } from "./ConnectRing";
 import { Sparkline } from "./Sparkline";
-import { DEFAULT_OPTS, IDLE, LayoutView, Profile, SessionOpts, StatusSnapshot } from "./types";
+import {
+  DEFAULT_OPTS,
+  DetectedApp,
+  IDLE,
+  Profile,
+  SessionOpts,
+  sourceLabel,
+  StatusSnapshot,
+} from "./types";
 import "./App.css";
 
-type Tab = "home" | "routes" | "settings";
+type Tab = "home" | "routes" | "apps" | "settings";
 type Sheet = "none" | "routes" | "add";
 
 function fmtRtt(n: number | null | undefined): string {
@@ -52,7 +60,11 @@ export default function App() {
   const [renameVal, setRenameVal] = useState("");
   const [dropOver, setDropOver] = useState(false);
   const [opts, setOpts] = useState<SessionOpts>(DEFAULT_OPTS);
-  const [layouts, setLayouts] = useState<LayoutView[]>([]);
+  const [apps, setApps] = useState<DetectedApp[]>([]);
+  const [tunneled, setTunneled] = useState<string[]>([]);
+  const [appQuery, setAppQuery] = useState("");
+  const [appSource, setAppSource] = useState<string>("all");
+  const [scanning, setScanning] = useState(false);
 
   const refresh = useCallback(async () => {
     const list = await invoke<Profile[]>("list_profiles");
@@ -65,7 +77,8 @@ export default function App() {
     invoke<StatusSnapshot>("get_status").then(setStatus).catch(() => {});
     invoke("helper_ok").catch((e) => setNote(String(e)));
     invoke<SessionOpts>("get_opts").then(setOpts).catch(() => {});
-    invoke<LayoutView[]>("list_layouts").then(setLayouts).catch(() => {});
+    invoke<DetectedApp[]>("list_apps").then(setApps).catch(() => {});
+    invoke<string[]>("tunneled_ids").then(setTunneled).catch(() => {});
     refresh().catch(() => {});
     const un = listen<StatusSnapshot>("status", (e) => {
       setStatus(e.payload);
@@ -237,23 +250,50 @@ export default function App() {
     }
   }
 
-  async function toggleLayout(id: string) {
-    const on = opts.layouts.includes(id);
-    let layoutsNext: string[];
-    if (id === "all") {
-      layoutsNext = on ? ["steam", "discord"] : ["all"];
-    } else if (on) {
-      layoutsNext = opts.layouts.filter((x) => x !== id);
-    } else if (opts.layouts.includes("all")) {
-      layoutsNext = [id];
-    } else if (opts.layouts.length >= 3) {
-      setNote("Pick up to 3 layouts");
-      return;
-    } else {
-      layoutsNext = [...opts.layouts, id];
-    }
-    await saveOpts({ ...opts, layouts: layoutsNext });
+  async function saveTunneled(ids: string[]) {
+    const next = await invoke<string[]>("set_tunneled", { ids });
+    setTunneled(next);
   }
+
+  async function toggleApp(id: string) {
+    const next = tunneled.includes(id)
+      ? tunneled.filter((x) => x !== id)
+      : [...tunneled, id];
+    await saveTunneled(next);
+  }
+
+  async function rescan() {
+    setScanning(true);
+    try {
+      const list = await invoke<DetectedApp[]>("refresh_apps");
+      setApps(list);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function addManual() {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "App", extensions: ["exe"] }],
+    });
+    if (!picked || Array.isArray(picked)) return;
+    try {
+      const a = await invoke<DetectedApp>("add_manual_app", { path: picked });
+      setApps((cur) => (cur.some((x) => x.id === a.id) ? cur : [...cur, a]));
+    } catch (e) {
+      setNote(String(e));
+    }
+  }
+
+  const shownApps = apps.filter((a) => {
+    if (appSource !== "all" && a.source !== appSource) return false;
+    if (!appQuery.trim()) return true;
+    const q = appQuery.toLowerCase();
+    return a.name.toLowerCase().includes(q) || a.executable.toLowerCase().includes(q);
+  });
 
   const addPanel = (
     <AddConfig
@@ -309,9 +349,9 @@ export default function App() {
           </button>
 
           <p className="split-line">
-            {opts.layouts
-              .map((id) => layouts.find((l) => l.id === id)?.name ?? id)
-              .join(" · ") || "Steam · Discord"}
+            {tunneled.length
+              ? `${tunneled.length} app${tunneled.length === 1 ? "" : "s"} marked — full tunnel until per-process redirect`
+              : "Full tunnel · pick apps in Apps"}
           </p>
 
           {status.error && <p className="fault">{status.error}</p>}
@@ -349,69 +389,121 @@ export default function App() {
         </main>
       )}
 
+      {tab === "apps" && (
+        <main className="page">
+          <header className="page-h">
+            <h1>Apps</h1>
+            <div className="page-actions">
+              <button type="button" className="ghost" onClick={addManual}>
+                Add
+              </button>
+              <button type="button" className="ghost" disabled={scanning} onClick={rescan}>
+                {scanning ? "Scanning…" : "Refresh"}
+              </button>
+            </div>
+          </header>
+          <div className="app-tools">
+            <input
+              className="search"
+              placeholder="Search"
+              value={appQuery}
+              onChange={(e) => setAppQuery(e.target.value)}
+            />
+            <select value={appSource} onChange={(e) => setAppSource(e.target.value)}>
+              <option value="all">All</option>
+              <option value="steam">Steam</option>
+              <option value="epic">Epic</option>
+              <option value="riot">Riot</option>
+              <option value="battle_net">Battle.net</option>
+              <option value="gog">GOG</option>
+              <option value="discord">Discord</option>
+              <option value="manual">Manual</option>
+            </select>
+          </div>
+          <div className="page-actions bulk">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                saveTunneled(
+                  apps.filter((a) => a.source !== "discord" && !a.missing).map((a) => a.id)
+                )
+              }
+            >
+              Select games
+            </button>
+            <button type="button" className="ghost" onClick={() => saveTunneled([])}>
+              Clear
+            </button>
+          </div>
+          <p className="hint">
+            Checked apps are the ones you want boosted. Per-process redirect is not in this build
+            (no NDIS). Boost is still a full tunnel.
+          </p>
+          <ul className="apps">
+            {shownApps.length === 0 && (
+              <li className="empty">No apps yet — Refresh or add an .exe</li>
+            )}
+            {shownApps.map((a) => (
+              <li key={a.id} className={a.missing ? "missing" : ""}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={tunneled.includes(a.id)}
+                    disabled={a.missing}
+                    onChange={() => toggleApp(a.id)}
+                  />
+                  <span>
+                    <strong>
+                      {a.name}
+                      {a.missing ? " (missing)" : ""}
+                    </strong>
+                    <em>
+                      {sourceLabel(a.source)} · {a.executable}
+                    </em>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </main>
+      )}
+
       {tab === "settings" && (
         <main className="page">
           <header className="page-h">
             <h1>Settings</h1>
           </header>
           <ul className="rows">
-            <li className="stack">
-              <div>
-                <strong>What to boost</strong>
-                <em>Up to 3 layouts. Route-based — only those prefixes use AGG. Next Boost applies it.</em>
-              </div>
-              <div className="pills">
-                {layouts.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    className={`pill ${opts.layouts.includes(o.id) ? "on" : ""}`}
-                    onClick={() => toggleLayout(o.id)}
-                    title={o.hint}
-                  >
-                    {o.name}
-                  </button>
-                ))}
-              </div>
-            </li>
             <li>
               <div>
                 <strong>Kill switch</strong>
                 <em>Block the internet if the tunnel drops</em>
               </div>
-              <button
-                type="button"
-                className={`switch ${opts.kill_switch ? "on" : ""}`}
+              <Toggle
+                on={opts.kill_switch}
                 onClick={() => saveOpts({ ...opts, kill_switch: !opts.kill_switch })}
-              >
-                {opts.kill_switch ? "On" : "Off"}
-              </button>
+              />
             </li>
             <li>
               <div>
                 <strong>Auto reconnect</strong>
-                <em>Come back after Wi-Fi or sleep</em>
+                <em>After Wi-Fi, sleep, or network change</em>
               </div>
-              <button
-                type="button"
-                className={`switch ${opts.auto_reconnect ? "on" : ""}`}
+              <Toggle
+                on={opts.auto_reconnect}
                 onClick={() => saveOpts({ ...opts, auto_reconnect: !opts.auto_reconnect })}
-              >
-                {opts.auto_reconnect ? "On" : "Off"}
-              </button>
+              />
             </li>
             <li>
               <div>
                 <strong>MTU sweep</strong>
                 <em>Pick a path MTU so packets do not fragment</em>
               </div>
-              <button
-                type="button"
-                className={`switch ${opts.mtu_sweep ? "on" : ""}`}
+              <Toggle
+                on={opts.mtu_sweep}
                 onClick={() => saveOpts({ ...opts, mtu_sweep: !opts.mtu_sweep })}
-              >
-                {opts.mtu_sweep ? "On" : "Off"}
-              </button>
+              />
             </li>
             <li>
               <div>
@@ -423,7 +515,7 @@ export default function App() {
         </main>
       )}
 
-      <nav className="tabs">
+      <nav className="tabs four">
         <button type="button" className={tab === "home" ? "on" : ""} onClick={() => setTab("home")}>
           Boost
         </button>
@@ -433,6 +525,9 @@ export default function App() {
           onClick={() => setTab("routes")}
         >
           Routes
+        </button>
+        <button type="button" className={tab === "apps" ? "on" : ""} onClick={() => setTab("apps")}>
+          Apps
         </button>
         <button
           type="button"
@@ -612,5 +707,14 @@ function ServerList({
         </li>
       ))}
     </ul>
+  );
+}
+
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className={`toggle ${on ? "on" : "off"}`} onClick={onClick}>
+      <span className="toggle-knob" />
+      <span className="toggle-txt">{on ? "ON" : "OFF"}</span>
+    </button>
   );
 }

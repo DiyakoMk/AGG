@@ -3,6 +3,7 @@
 //! AmneziaWG 2.0 config + BoringTun `Tunn` lifecycle + stats + route split.
 
 pub mod config;
+pub mod discovery;
 pub mod error;
 pub mod health;
 pub mod ipc;
@@ -14,7 +15,8 @@ pub mod udp_session;
 
 pub use config::{parse_conf, WgConfig};
 pub use error::AggError;
-pub use policy::{catalog, destinations, processes, tunnel_nets, Layout, SessionOpts, MAX_LAYOUTS};
+pub use discovery::{scan, windows_roots, AppSource, DetectedApp, ScanRoots};
+pub use policy::{tunnel_nets, SessionOpts};
 pub use stats::TunnelStats;
 pub use status::{ConnectionState, StatusSnapshot};
 pub use tunnel::TunnelEngine;

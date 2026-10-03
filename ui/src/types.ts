@@ -6,23 +6,34 @@ export type ConnectionState =
   | "error";
 
 export type SessionOpts = {
-  layouts: string[];
   kill_switch: boolean;
   auto_reconnect: boolean;
   mtu_sweep: boolean;
 };
 
-export type LayoutView = {
-  id: string;
-  name: string;
-  hint: string;
-};
-
 export const DEFAULT_OPTS: SessionOpts = {
-  layouts: ["steam", "discord"],
   kill_switch: false,
   auto_reconnect: true,
   mtu_sweep: true,
+};
+
+export type AppSource =
+  | "steam"
+  | "epic"
+  | "riot"
+  | "battle_net"
+  | "gog"
+  | "discord"
+  | "manual";
+
+export type DetectedApp = {
+  id: string;
+  name: string;
+  source: AppSource;
+  executable: string;
+  install_dir: string;
+  icon_path: string | null;
+  missing: boolean;
 };
 
 export type StatusSnapshot = {
@@ -64,3 +75,22 @@ export const IDLE: StatusSnapshot = {
   rtt_history: [],
   opts: DEFAULT_OPTS,
 };
+
+export function sourceLabel(s: AppSource): string {
+  switch (s) {
+    case "steam":
+      return "Steam";
+    case "epic":
+      return "Epic";
+    case "riot":
+      return "Riot";
+    case "battle_net":
+      return "Battle.net";
+    case "gog":
+      return "GOG";
+    case "discord":
+      return "Discord";
+    default:
+      return "Manual";
+  }
+}

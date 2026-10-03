@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::policy::{Layout, SessionOpts};
+use crate::policy::SessionOpts;
 use crate::status::StatusSnapshot;
 
 pub const PIPE_NAME: &str = r"\\.\pipe\AGGService";
@@ -53,21 +53,4 @@ pub struct IpcResponse {
     pub error: Option<String>,
     #[serde(default)]
     pub status: Option<StatusSnapshot>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LayoutView {
-    pub id: String,
-    pub name: String,
-    pub hint: String,
-}
-
-impl From<&Layout> for LayoutView {
-    fn from(l: &Layout) -> Self {
-        Self {
-            id: l.id.into(),
-            name: l.name.into(),
-            hint: l.hint.into(),
-        }
-    }
 }

@@ -408,6 +408,10 @@ textarea:focus-visible {
   padding: 0.35rem 0.4rem 0.7rem;
 }
 
+.tabs.four {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
 .tabs button {
   background: none;
   border: 0;
@@ -535,20 +539,93 @@ textarea:focus-visible {
   font-size: 0.75rem;
 }
 
-.switch {
-  min-width: 3.2rem;
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 5.4rem;
   border: 0;
   border-radius: 999px;
-  padding: 0.35rem 0.7rem;
-  background: #1c1c22;
-  color: var(--mute);
+  padding: 0.28rem 0.55rem 0.28rem 0.28rem;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
-.switch.on {
+.toggle.off {
+  background: #2a2a32;
+  color: #c8c8d0;
+}
+
+.toggle.on {
   background: var(--cyan);
   color: #041016;
+}
+
+.toggle-knob {
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: #f4f4f6;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.toggle.on .toggle-knob {
+  background: #041016;
+}
+
+.app-tools {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.app-tools .search,
+.app-tools select {
+  flex: 1;
+  background: #101014;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.bulk {
+  margin: 0.2rem 0 0.4rem;
+}
+
+.apps {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+}
+
+.apps li {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.apps label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.apps strong {
+  display: block;
+}
+
+.apps em {
+  display: block;
+  font-style: normal;
+  color: var(--mute);
+  font-size: 0.68rem;
+  word-break: break-all;
+}
+
+.apps li.missing strong {
+  color: var(--warn);
 }
 
 .paste {
